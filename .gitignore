@@ -1,0 +1,10 @@
+*.o
+*.a
+*.bak
+*.tmp
+*.lha
+*.zip
+*.exe
+.vscode/
+build/
+dist/
