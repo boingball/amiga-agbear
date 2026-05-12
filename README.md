@@ -62,3 +62,19 @@ Asset Notes
 
 Source code is intended for open preservation.
 
+The included sound samples were recorded from the author's own AG Bear toys for preservation and experimentation.
+
+Bear images were photographed/digitised by the author from their own collection.
+
+Some background artwork was generated with ChatGPT/OpenAI image tools for use in this project.
+
+Source code is released under the repository licence. Assets are included for preservation and demonstration of the application.
+
+## Licence
+
+Source code: MIT Licence.
+
+Assets: included for preservation, testing, and demonstration. Please do not reuse the AG Bear sound/image assets commercially without checking rights.
+
+AG Bear is a vintage toy originally produced by Axlon. This is an unofficial fan/preservation project.
+
