@@ -1249,8 +1249,8 @@ static void DrawStats(void)
         WORD h, cx = x + (i <= 5 ? 14 : 150), cy = y + 47 + ((i - 1) % 5 + 1) * 10;
         Gfx_Text(cx, cy, PEN_BLACK, bearName[i]);
         for (h = 0; h < 5; h++)
-            if (h < pet.friend[i]) Gfx_Image(imgs[PET_PROP_HEART], cx + 72 + h * 11, cy);
-            else Gfx_Fill(PEN_GREY, cx + 74 + h * 11, cy + 2, 5, 4);
+            if (h < pet.friend[i]) Gfx_Image(imgs[PET_PROP_HEART], cx + 80 + h * 11, cy);
+            else Gfx_Fill(PEN_GREY, cx + 82 + h * 11, cy + 2, 5, 4);
     }
     sprintf(buf, "Bag: %u honey, %u cake, %u medicine", pet.honey, pet.cake, pet.medi);
     Gfx_Text(x + 10, y + 110, PEN_BLACK, buf);
