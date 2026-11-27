@@ -1,0 +1,501 @@
+#!/usr/bin/env python3
+"""Converts the AG Bear pictures and sounds into C data for the two programs.
+
+    python3 tools/mkassets.py        # writes src/gen/{pet,talk,sounds}_data.{c,h}
+
+Inputs: the original pictures (bg.png, outside-house.png, art/source/*.png converted from the
+repo's ILBMs), the generated art in art/ (tools/mkart.py) and the 8SVX samples in sounds/.
+
+Each program gets one 256-colour palette (see PALETTE LAYOUT below).  Pictures are stored as
+chunky pen numbers packed with PackBits; pen 0 means "transparent" in sprites and props.
+"""
+import struct
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
+ROOT = Path(__file__).resolve().parent.parent
+ART = ROOT / "art"
+SRC = ART / "source"
+GEN = ROOT / "src" / "gen"
+
+# PALETTE LAYOUT (both programs)
+#   0..15   fixed user-interface colours (agb_ui.h names them)
+#   16..19  mouse pointer (AGA sprite colours 17..19)
+#   pet:   20..131  four bears x 28 colours (AG Bear, Rosie, Pip, Honey)
+#          132..255 scenes, props, icons and dress-up items
+#   talk:  20..179  the bear photo (both mouths) - recoloured at run time for fur colours
+#          180..195 colour-cycling backdrop pens (set at run time)
+#          196..255 backdrops, dress-up items and icons
+UI = [0x282430, 0x141218, 0xFFFFFF, 0x4E4359, 0x6A5A80, 0x9A88B0, 0x43385A, 0xF8D848,
+      0xE04A4A, 0x58B058, 0xF6A84C, 0x5C8CD8, 0xFCF4E0, 0xB4B0BC, 0xF4A6B8, 0xA0D6E9,
+      0x000000, 0xE03030, 0x101010, 0xF8E0C0]
+
+BEAR_COLS = 28
+BEAR_SIZE = 64
+
+
+def rgb_int(c):
+    return (int(c[0]) << 16) | (int(c[1]) << 8) | int(c[2])
+
+
+def load_rgba(path):
+    return Image.open(path).convert("RGBA")
+
+
+def opaque_pixels(images):
+    """All opaque RGB pixels of the images as an N x 3 array."""
+    rows = []
+    for im in images:
+        a = np.asarray(im.convert("RGBA"))
+        m = a[:, :, 3] >= 128
+        rows.append(a[m][:, :3])
+    return np.concatenate(rows) if rows else np.zeros((0, 3), np.uint8)
+
+
+def quantize(pixels, n):
+    """Palette of n colours for the given pixels (libimagequant through Pillow)."""
+    if len(pixels) == 0:
+        return []
+    uniq = np.unique(pixels, axis=0)
+    if len(uniq) <= n:
+        return [tuple(int(v) for v in c) for c in uniq]
+    side = int(np.ceil(np.sqrt(len(pixels))))
+    buf = np.zeros((side * side, 3), np.uint8)
+    buf[:len(pixels)] = pixels
+    buf[len(pixels):] = pixels[0]
+    im = Image.fromarray(buf.reshape(side, side, 3), "RGB")
+    q = im.quantize(colors=n, method=Image.Quantize.LIBIMAGEQUANT, dither=Image.Dither.NONE)
+    pal = q.getpalette()[:n * 3]
+    return [tuple(pal[i:i + 3]) for i in range(0, len(pal), 3)]
+
+
+def map_image(im, palette, base, dither=False):
+    """Chunky pen numbers (base + index into palette); transparent pixels -> 0."""
+    im = im.convert("RGBA")
+    alpha = np.asarray(im)[:, :, 3]
+    if dither:
+        pimg = Image.new("P", (1, 1))
+        flat = [v for c in palette for v in c]
+        flat += flat[:3] * (256 - len(palette))
+        pimg.putpalette(flat)
+        rgb = Image.new("RGB", im.size, palette[0])
+        rgb.paste(im.convert("RGB"), mask=im.split()[3])
+        idx = np.asarray(rgb.quantize(palette=pimg, dither=Image.Dither.FLOYDSTEINBERG)).astype(np.int32)
+        idx = np.minimum(idx, len(palette) - 1)
+    else:
+        pal = np.array(palette, np.int32)
+        px = np.asarray(im)[:, :, :3].astype(np.int32)
+        # weighted RGB distance, the eye cares most about green
+        d = ((px[:, :, None, :] - pal[None, None, :, :]) ** 2 * np.array([3, 4, 2])).sum(axis=3)
+        idx = d.argmin(axis=2)
+    out = (idx + base).astype(np.uint8)
+    out[alpha < 128] = 0
+    return out
+
+
+def packbits(data):
+    out = bytearray()
+    i, n = 0, len(data)
+    while i < n:
+        run = 1
+        while i + run < n and run < 128 and data[i + run] == data[i]:
+            run += 1
+        if run >= 3:
+            out += bytes([257 - run, data[i]])
+            i += run
+            continue
+        j = i
+        lit = bytearray()
+        while j < n and len(lit) < 128:
+            if j + 2 < n and data[j] == data[j + 1] == data[j + 2]:
+                break
+            lit.append(data[j])
+            j += 1
+        out += bytes([len(lit) - 1]) + lit
+        i = j
+    return bytes(out)
+
+
+class Blob:
+    def __init__(self, prefix):
+        self.prefix = prefix
+        self.data = bytearray()
+        self.images = []   # (name, w, h, offset, packed_len)
+
+    def add(self, name, chunky):
+        h, w = chunky.shape
+        packed = packbits(chunky.tobytes())
+        self.images.append((name, w, h, len(self.data), len(packed)))
+        self.data += packed
+        if len(self.data) & 1:
+            self.data.append(0)
+
+    def write(self, palette, extra_h="", extra_c=""):
+        GEN.mkdir(parents=True, exist_ok=True)
+        p = self.prefix
+        P = p.upper()
+        h = [f"/* generated by tools/mkassets.py - do not edit */",
+             f"#ifndef {P}_DATA_H", f"#define {P}_DATA_H", '#include "../common/agb_gfx.h"', ""]
+        for i, (name, w, hh, off, ln) in enumerate(self.images):
+            h.append(f"#define {P}_{name.upper().replace('-', '_')} {i}  /* {w}x{hh} */")
+        h += [f"#define {P}_NUM_IMAGES {len(self.images)}",
+              f"extern const PackedImage {p}_images[{len(self.images)}];",
+              f"extern const UBYTE {p}_blob[];",
+              f"extern const ULONG {p}_palette[256];", extra_h, "#endif", ""]
+        (GEN / f"{p}_data.h").write_text("\n".join(h))
+        c = [f"/* generated by tools/mkassets.py - do not edit */", f'#include "{p}_data.h"', "",
+             f"const ULONG {p}_palette[256] = {{"]
+        for i in range(0, 256, 8):
+            c.append("  " + ", ".join(f"0x{rgb_int(col):06X}" for col in palette[i:i + 8]) + ",")
+        c += ["};", "", f"const PackedImage {p}_images[{len(self.images)}] = {{"]
+        for name, w, hh, off, ln in self.images:
+            c.append(f"  {{ {w}, {hh}, {off}, {ln} }}, /* {name} */")
+        c += ["};", "", f"const UBYTE {p}_blob[{len(self.data)}] = {{"]
+        for i in range(0, len(self.data), 24):
+            c.append("  " + ",".join(str(b) for b in self.data[i:i + 24]) + ",")
+        c += ["};", extra_c, ""]
+        (GEN / f"{p}_data.c").write_text("\n".join(c))
+        print(f"{p}: {len(self.images)} images, {len(self.data)} packed bytes")
+
+
+def full_palette(parts):
+    pal = [((v >> 16) & 255, (v >> 8) & 255, v & 255) for v in UI]
+    for base, cols, size in parts:
+        while len(pal) < base:
+            pal.append((0, 0, 0))
+        cols = list(cols)[:size]
+        pal += cols
+        pal += [(0, 0, 0)] * (size - len(cols))
+    pal += [(0, 0, 0)] * (256 - len(pal))
+    return pal[:256]
+
+
+# --- bears -------------------------------------------------------------------------------
+def bear_frames():
+    """The 8 48x48 frames of bear32 scaled to 64x64, white background made transparent."""
+    sheet = Image.open(SRC / "bear32.png").convert("RGB")
+    frames = []
+    for f in range(8):
+        tile = sheet.crop(((f % 4) * 48, (f // 4) * 48, (f % 4) * 48 + 48, (f // 4) * 48 + 48))
+        a = np.asarray(tile).astype(np.int32)
+        white = (a.min(axis=2) >= 215)
+        # flood fill the white background from the tile's border
+        bg = np.zeros(white.shape, bool)
+        stack = [(y, x) for y in range(48) for x in (0, 47)] + [(y, x) for x in range(48) for y in (0, 47)]
+        while stack:
+            y, x = stack.pop()
+            if 0 <= y < 48 and 0 <= x < 48 and white[y, x] and not bg[y, x]:
+                bg[y, x] = True
+                stack += [(y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)]
+        rgba = np.dstack([a.astype(np.uint8), np.where(bg, 0, 255).astype(np.uint8)])
+        im = Image.fromarray(rgba, "RGBA").resize((BEAR_SIZE, BEAR_SIZE), Image.LANCZOS)
+        frames.append(im)
+    return frames
+
+
+def recolour(cols, hue, sat_mul, sat_add, val_mul):
+    import colorsys
+    out = []
+    for r, g, b in cols:
+        h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+        is_cap = s > 0.5 and (h < 0.05 or h > 0.92) and v > 0.35
+        if not is_cap:
+            h = hue
+            s = min(1.0, s * sat_mul + sat_add)
+            v = min(1.0, v * val_mul)
+        else:
+            h = (h + 0.55) % 1.0  # friends get a different coloured cap
+        rr, gg, bb = colorsys.hsv_to_rgb(h, s, v)
+        out.append((round(rr * 255), round(gg * 255), round(bb * 255)))
+    return out
+
+
+FRIENDS = [  # name, hue, sat*, sat+, val*
+    ("rosie", 0.94, 0.9, 0.22, 1.08),
+    ("pip", 0.58, 0.8, 0.18, 1.05),
+    ("honey", 0.11, 1.1, 0.25, 1.12),
+]
+
+
+# --- scenes ------------------------------------------------------------------------------
+def crop_scene(path, top):
+    im = Image.open(path).convert("RGBA")
+    return im.crop((0, top, 320, top + 200))
+
+
+def art(name):
+    return load_rgba(ART / f"{name}.png")
+
+
+PET_SCENES = [("home", lambda: crop_scene(ROOT / "bg.png", 34)),
+              ("garden", lambda: crop_scene(ROOT / "outside-house.png", 28)),
+              ("park", lambda: art("scene-park")),
+              ("shop", lambda: art("scene-shop"))]
+
+PET_PROPS = ["prop-honey", "prop-apple", "prop-cake", "prop-bee", "prop-ball", "prop-coin", "prop-heart",
+             "prop-gift", "prop-bubble", "prop-note", "prop-zzz",
+             "balloon-red", "balloon-green", "balloon-blue", "balloon-yellow",
+             "balloon-red-lit", "balloon-green-lit", "balloon-blue-lit", "balloon-yellow-lit",
+             "pet-shades", "pet-shades-side", "pet-shades-sidel", "pet-partyhat", "pet-crown"]
+PET_ICONS = ["feed", "wash", "nap", "medi", "game", "dress", "go", "menu", "home", "garden", "park", "shop",
+             "hi", "together", "swing", "catch", "fetch", "dance", "back", "picnic", "save", "quit", "tick",
+             "voice", "tickle", "item-honey", "item-apple", "item-cake", "item-ball", "item-gift",
+             "item-shades", "item-partyhat", "item-crown", "item-medi"]
+
+
+def build_pet():
+    frames = bear_frames()
+    bear_pal = quantize(opaque_pixels(frames), BEAR_COLS)
+    scenes = [(n, f()) for n, f in PET_SCENES]
+    props = [(n, art(n)) for n in PET_PROPS]
+    icons = [(f"icon-{n}", art(f"icon-{n}")) for n in PET_ICONS]
+    poop = load_rgba(ROOT / "poop.png").resize((14, 14), Image.LANCZOS)
+    props.append(("prop-poop", poop))
+    flat = [im for _, im in props + icons] + [scenes[2][1], scenes[3][1]]
+    rest_pal = quantize(opaque_pixels(flat + [scenes[0][1], scenes[1][1]]), 108)
+    seal = [art("seal-0"), art("seal-1")]
+    seal_pal = quantize(opaque_pixels(seal), 16)
+    parts = [(20, bear_pal, BEAR_COLS)]
+    for i, (_, hue, sm, sa, vm) in enumerate(FRIENDS):
+        parts.append((20 + BEAR_COLS * (i + 1), recolour(bear_pal, hue, sm, sa, vm), BEAR_COLS))
+    parts.append((132, rest_pal, 108))
+    parts.append((240, seal_pal, 16))
+    palette = full_palette(parts)
+    # the title screen has a palette of its own (loaded only while it is shown)
+    title = art("title")
+    title_pal = quantize(opaque_pixels([title]), 236)
+    title_palette = full_palette([(20, title_pal, 236)])
+
+    blob = Blob("pet")
+    for f, im in enumerate(frames):
+        blob.add(f"bear{f}", map_image(im, bear_pal, 20, dither=True))
+    for n, im in scenes:
+        blob.add(f"scene-{n}", map_image(im, rest_pal, 132))
+    for n, im in props + icons:
+        blob.add(n, map_image(im, rest_pal, 132))
+    blob.add("seal-0", map_image(seal[0], seal_pal, 240, dither=True))
+    blob.add("seal-1", map_image(seal[1], seal_pal, 240, dither=True))
+    blob.add("title", map_image(title, title_pal, 20, dither=True))
+    extra_h = (f"#define PET_BEAR_COLS {BEAR_COLS}\n#define PET_BEAR_BASE 20\n#define PET_BEAR_SIZE {BEAR_SIZE}\n"
+               f"#define PET_ART_BASE 132\nextern const ULONG pet_title_palette[256];\n")
+    extra_c = ["const ULONG pet_title_palette[256] = {"]
+    for i in range(0, 256, 8):
+        extra_c.append("  " + ", ".join(f"0x{rgb_int(c):06X}" for c in title_palette[i:i + 8]) + ",")
+    extra_c.append("};")
+    blob.write(palette, extra_h, "\n".join(extra_c))
+    return palette
+
+
+# fur colours for the talker: (name, hue, saturation*, saturation+, value*); None = keep
+FURS = [("Brown", None, 1, 0, 1), ("Pink", 0.93, 0.8, 0.30, 1.1), ("Blue", 0.58, 0.8, 0.30, 1.05),
+        ("Gold", 0.12, 1.0, 0.35, 1.12), ("Green", 0.33, 0.8, 0.28, 1.0), ("Purple", 0.77, 0.8, 0.30, 1.0),
+        ("Silver", 0.0, 0.0, 0.0, 1.15)]
+RAINBOW_STEPS = 12
+
+
+def fur_palettes(photo_pal):
+    import colorsys
+    out = []
+
+    def tint(hue, sm, sa, vm):
+        res = []
+        for r, g, b in photo_pal:
+            h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+            if hue is not None and s < 0.5:
+                h, s, v = hue, min(1.0, s * sm + sa), min(1.0, v * vm)
+            rr, gg, bb = colorsys.hsv_to_rgb(h, s, v)
+            res.append((round(rr * 255) << 16) | (round(gg * 255) << 8) | round(bb * 255))
+        return res + [0] * (160 - len(res))
+
+    for _, hue, sm, sa, vm in FURS:
+        out.append(tint(hue, sm, sa, vm))
+    for i in range(RAINBOW_STEPS):
+        out.append(tint(i / RAINBOW_STEPS, 0.8, 0.35, 1.05))
+    return out
+
+
+# --- talker ------------------------------------------------------------------------------
+TALK_STAGE = 228        # the stage is TALK_STAGE wide and TALK_STAGE_H high
+TALK_STAGE_H = 216
+TALK_PHOTO_W = 180      # photo scaled to this width (300x276 source)
+TALK_ITEM_SCALE = 0.82  # dress-up items were drawn for a 220 pixel wide head
+TALK_HAT_MAX_H = 58
+MOUTH_X, MOUTH_Y = 72, 162
+
+
+def talk_photos():
+    """Closed and open mouth photos, white background removed, scaled to TALK_PHOTO_W."""
+    base = Image.open(SRC / "agbear.png").convert("RGB")
+    out = {}
+    for n in ("closed", "open"):
+        m = Image.open(SRC / f"mouth_{n}.png").convert("RGB")
+        im = base.copy()
+        ma = np.asarray(m).astype(np.int32)
+        mask = Image.fromarray(np.where(ma.sum(axis=2) < 740, 255, 0).astype(np.uint8), "L")
+        im.paste(m, (MOUTH_X, MOUTH_Y), mask)
+        a = np.asarray(im).astype(np.int32)
+        white = a.min(axis=2) >= 248
+        # background = white connected to the border (keeps white highlights inside the fur)
+        h, w = white.shape
+        bg = np.zeros(white.shape, bool)
+        stack = [(y, x) for y in range(h) for x in (0, w - 1)] + [(0, x) for x in range(w)]
+        while stack:
+            y, x = stack.pop()
+            if 0 <= y < h and 0 <= x < w and white[y, x] and not bg[y, x]:
+                bg[y, x] = True
+                stack += [(y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)]
+        rgba = np.dstack([a.astype(np.uint8), np.where(bg, 0, 255).astype(np.uint8)])
+        img = Image.fromarray(rgba, "RGBA")
+        th = round(276 * TALK_PHOTO_W / 300)
+        out[n] = img.resize((TALK_PHOTO_W, th), Image.LANCZOS)
+    return out
+
+
+def talk_backdrop(path, top, scale_h):
+    im = Image.open(path).convert("RGBA")
+    w = round(im.width * scale_h / im.height)
+    im = im.resize((w, scale_h), Image.NEAREST if scale_h % im.height == 0 else Image.LANCZOS)
+    x0 = (w - TALK_STAGE) // 2
+    return im.crop((x0, top, x0 + TALK_STAGE, top + TALK_STAGE_H))
+
+
+TALK_ITEMS = ["talk-glasses-cool", "talk-glasses-hearts", "talk-glasses-star", "talk-glasses-specs",
+              "talk-hat-party", "talk-hat-top", "talk-hat-crown", "talk-hat-cap", "talk-hat-wizard",
+              "talk-hat-flower", "talk-bow-red", "talk-bow-blue", "talk-bow-spots", "talk-moustache"]
+TALK_ICONS = ["voice", "dance", "hi", "tickle", "game", "save", "quit", "together"]
+
+
+def character_photos():
+    """(closed RGBA, open RGBA, anchors) for every Talker character; [0] is the original AG Bear."""
+    import sys
+    sys.path.insert(0, str(ROOT / "tools"))
+    from characters import CHARACTERS
+    from PIL import ImageDraw
+    p = talk_photos()
+    out = [(p["closed"], p["open"], dict(hat=(90, 24), glasses=(90, 47), tash=(86, 96), bow=(90, 152)))]
+    for c in CHARACTERS:
+        im = Image.open(ART / "photos" / c["file"]).convert("RGBA").crop(c["crop"])
+        h = round(im.height * TALK_PHOTO_W / im.width)
+        im = im.resize((TALK_PHOTO_W, min(h, TALK_STAGE_H)), Image.LANCZOS) if h <= TALK_STAGE_H else \
+            im.resize((TALK_PHOTO_W, h), Image.LANCZOS).crop((0, 0, TALK_PHOTO_W, TALK_STAGE_H))
+        x0, y0, x1, y1 = c["jaw"]
+        d = c["drop"]
+        op = im.copy()
+        jaw = im.crop((x0, y0, x1, y1))
+        ImageDraw.Draw(op).ellipse((x0 + 3, y0 - 1, x1 - 3, y0 + d * 2), fill=(64, 24, 24, 255))
+        op.alpha_composite(jaw, (x0, y0 + d))
+        out.append((im, op, c))
+    return out
+
+
+def build_talk():
+    chars = character_photos()
+    backs = [("home", talk_backdrop(ROOT / "bg.png", 20, 240)),
+             ("park", talk_backdrop(ART / "scene-park.png", 0, 216)),
+             ("house", talk_backdrop(ROOT / "outside-house.png", 20, 240)),
+             ("shop", talk_backdrop(ART / "scene-shop.png", 0, 216)),
+             ("space", art("talk-back-space"))]
+    items = []
+    for n in TALK_ITEMS:
+        im = art(n)
+        k = TALK_ITEM_SCALE
+        if "-hat-" in n and im.height * k > TALK_HAT_MAX_H:
+            k = TALK_HAT_MAX_H / im.height
+        items.append((n, im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS)))
+    icons = [(f"icon-{n}", art(f"icon-{n}")) for n in TALK_ICONS]
+    rest_pal = quantize(opaque_pixels([im for _, im in items + icons + backs]), 60)
+
+    blob = Blob("talk")
+    table, furs = [], []
+    first_pal = None
+    # each character: its picture, the open and closed mouth as patches, its own 160-colour palette
+    for i, (closed_im, open_im, anc) in enumerate(chars):
+        pal = quantize(opaque_pixels([closed_im, open_im]), 160)
+        first_pal = first_pal or pal
+        closed = map_image(closed_im, pal, 20, dither=True)
+        opened = map_image(open_im, pal, 20, dither=True)
+        if "jaw" in anc:   # keep only the jaw area (dithering differs a little everywhere else)
+            jx0, jy0, jx1, jy1 = anc["jaw"]
+            keep = closed.copy()
+            ys, xs = slice(max(jy0 - 2, 0), min(jy1 + anc["drop"] + 2, closed.shape[0])), slice(jx0, jx1)
+            keep[ys, xs] = opened[ys, xs]
+            opened = keep
+        diff = np.argwhere(closed != opened)
+        y0, x0 = diff.min(axis=0)
+        y1, x1 = diff.max(axis=0)
+        base = len(blob.images)
+        blob.add(f"char{i}-photo", closed)
+        blob.add(f"char{i}-open", opened[y0:y1 + 1, x0:x1 + 1])
+        blob.add(f"char{i}-closed", closed[y0:y1 + 1, x0:x1 + 1])
+        py = TALK_STAGE_H - closed.shape[0]
+        table.append([base, base + 1, base + 2, x0, y0, py, *anc["hat"], *anc["glasses"], *anc["bow"], *anc["tash"]])
+        furs.append(fur_palettes(pal))
+    palette = full_palette([(20, first_pal, 160), (196, rest_pal, 60)])
+    for n, im in backs:
+        blob.add(f"back-{n}", map_image(im, rest_pal, 196))
+    for n, im in items + icons:
+        blob.add(n, map_image(im, rest_pal, 196))
+    nf = len(furs[0])
+    extra_h = (f"#define TALK_STAGE {TALK_STAGE}\n#define TALK_STAGE_H {TALK_STAGE_H}\n"
+               f"#define TALK_NUM_CHARS {len(chars)}\n#define TALK_NUM_FURS {nf}\n#define TALK_RAINBOW_FIRST {len(FURS)}\n"
+               "/* photo, open, closed, mouthX, mouthY, photoY, hatX, hatBottom, glassesX, glassesY, bowX, bowY, tashX, tashY */\n"
+               f"extern const WORD talk_chars[TALK_NUM_CHARS][14];\n"
+               f"extern const ULONG talk_furs[TALK_NUM_CHARS][TALK_NUM_FURS][160];\n"
+               f"#define TALK_PHOTO_BASE 20\n#define TALK_PHOTO_COLS 160\n#define TALK_CYCLE_BASE 180\n"
+               f"#define TALK_ART_BASE 196\n")
+    extra_c = [f"const WORD talk_chars[TALK_NUM_CHARS][14] = {{"]
+    for t in table:
+        extra_c.append("  {" + ", ".join(str(int(v)) for v in t) + "},")
+    extra_c += ["};", "const ULONG talk_furs[TALK_NUM_CHARS][TALK_NUM_FURS][160] = {"]
+    for fc in furs:
+        extra_c.append(" {")
+        for f in fc:
+            extra_c.append("  {" + ",".join(f"0x{v:06X}" for v in f) + "},")
+        extra_c.append(" },")
+    extra_c.append("};")
+    blob.write(palette, extra_h, "\n".join(extra_c))
+
+
+# --- sounds ------------------------------------------------------------------------------
+SOUNDS = ["greeting1", "greeting2", "growl1", "growl2", "happy1", "happy2", "happy3", "hi", "no", "no2",
+          "nom1", "nom2", "wakeup", "wave", "yes"]
+
+
+def build_sounds():
+    h = ["/* generated by tools/mkassets.py - do not edit */", "#ifndef SOUNDS_DATA_H", "#define SOUNDS_DATA_H",
+         "#include <exec/types.h>",
+         "typedef struct { const BYTE *data; ULONG length; UWORD rate; } BearSample;", ""]
+    c = ["/* generated by tools/mkassets.py - do not edit */", '#include "sounds_data.h"', ""]
+    table = []
+    for i, n in enumerate(SOUNDS):
+        d = (ROOT / "sounds" / f"{n}.iff").read_bytes()
+        assert d[:4] == b"FORM" and d[8:12] == b"8SVX", n
+        p, body, rate = 12, None, 8287
+        while p + 8 <= len(d):
+            cid, sz = d[p:p + 4], struct.unpack(">I", d[p + 4:p + 8])[0]
+            if cid == b"VHDR":
+                rate = struct.unpack(">H", d[p + 20:p + 22])[0]
+            if cid == b"BODY":
+                body = d[p + 8:p + 8 + sz]
+            p += 8 + sz + (sz & 1)
+        body = body[:len(body) & ~1]
+        h.append(f"#define SND_{n.upper()} {i}")
+        c.append(f"static const BYTE s_{n}[{len(body)}] = {{")
+        sb = [b - 256 if b > 127 else b for b in body]
+        for j in range(0, len(sb), 32):
+            c.append("  " + ",".join(str(v) for v in sb[j:j + 32]) + ",")
+        c.append("};")
+        table.append(f"  {{ s_{n}, {len(body)}, {rate} }},")
+    h += [f"#define SND_COUNT {len(SOUNDS)}", "extern const BearSample bear_samples[SND_COUNT];", "#endif", ""]
+    c += ["", "const BearSample bear_samples[SND_COUNT] = {"] + table + ["};", ""]
+    (GEN / "sounds_data.h").write_text("\n".join(h))
+    (GEN / "sounds_data.c").write_text("\n".join(c))
+    print(f"sounds: {len(SOUNDS)} samples")
+
+
+if __name__ == "__main__":
+    build_pet()
+    build_talk()
+    build_sounds()
