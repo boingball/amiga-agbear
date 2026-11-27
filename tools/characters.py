@@ -13,4 +13,6 @@ CHARACTERS = [
          jaw=(58, 60, 106, 86), drop=6, hat=(88, 8), glasses=(84, 24), tash=(80, 52), bow=(84, 96)),
     dict(name="seal", file="seal.png", crop=(0, 0, 1378, 1206),
          jaw=(34, 84, 74, 100), drop=5, hat=(84, 10), glasses=(50, 64), tash=(52, 80), bow=(80, 130)),
+    dict(name="starfish", file="starfish-bear.png", crop=(0, 0, 2576, 2536),
+         jaw=(52, 52, 92, 66), drop=6, hat=(72, 12), glasses=(68, 24), tash=(68, 46), bow=(72, 72)),
 ]

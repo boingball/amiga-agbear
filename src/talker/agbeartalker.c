@@ -41,9 +41,11 @@ static const char stack[] __attribute__((used)) = "$STACK:32768";
 
 typedef struct { const char *name; WORD img; } Choice;
 
-static const Choice whos[] = { { "AG Bear", 0 }, { "Party", 1 }, { "Prof", 2 }, { "Ted", 3 }, { "Sid Seal", 4 } };
+static const Choice whos[] = { { "AG Bear", 0 }, { "Party", 1 }, { "Prof", 2 }, { "Ted", 3 }, { "Sid Seal", 4 },
+    { "Starfish", 5 } };
 static const char *whoHello[] = { "Hello! I'm AG Bear!", "Party Bear here! Let's party!",
-    "Good day. I'm Professor Bear.", "Hiya! I'm Ted! Look at my tongue!", "Arf arf! I'm Sid the Seal!" };
+    "Good day. I'm Professor Bear.", "Hiya! I'm Ted! Look at my tongue!", "Arf arf! I'm Sid the Seal!",
+    "Hello! I'm Starfish! I love my starry jumper!" };
 #define CH(i) (talk_chars[sel[R_WHO]][i])
 enum { C_PHOTO, C_OPEN, C_CLOSED, C_MX, C_MY, C_PY, C_HATX, C_HATB, C_GLX, C_GLY, C_BOWX, C_BOWY, C_TASHX, C_TASHY };
 

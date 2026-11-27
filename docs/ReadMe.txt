@@ -50,8 +50,8 @@ AG Bear Talker
 Type something in the box at the bottom and press Return (or click Say):
 AG Bear says it.
 
-On the right:  Who is talking (AG Bear, Party Bear, Professor Bear, Ted or
-Sid the Seal), Hat, Glasses, Bow tie, Moustache, Fur colour (try Rainbow!),
+On the right:  Who is talking (AG Bear, Party Bear, Professor Bear, Ted,
+Starfish or Sid the Seal), Hat, Glasses, Bow tie, Moustache, Fur colour (try Rainbow!),
 Backdrop (try Disco and Space!) and Voice.  Click the right side of a row for
 the next choice, the left side (or the right mouse button) to go back.
 
