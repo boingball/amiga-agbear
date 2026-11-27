@@ -38,8 +38,8 @@ static const char stack[] __attribute__((used)) = "$STACK:32768";
 /* bear frames (sprite sheet order of bear32.ilbm) */
 enum { F_FRONT = 0, F_TALK, F_WAVE, F_BACK, F_WR0, F_WR1, F_WL0, F_WL1 };
 
-enum { BEAR_AG = 0, BEAR_ROSIE, BEAR_PIP, BEAR_HONEY, NUM_BEARS };
-static const char *bearName[NUM_BEARS] = { "AG Bear", "Rosie", "Pip", "Honey" };
+enum { BEAR_AG = 0, BEAR_ROSIE, BEAR_PIP, BEAR_HONEY, BEAR_SID, NUM_BEARS };
+static const char *bearName[NUM_BEARS] = { "AG Bear", "Rosie", "Pip", "Honey", "Sid Seal" };
 
 typedef enum { SC_HOME, SC_GARDEN, SC_PARK, SC_SHOP, NUM_SCENES } Scene;
 
@@ -86,8 +86,8 @@ typedef struct {
     UBYTE speed;
 } Actor;
 
-#define MAX_ACTORS 3
-static Actor actors[MAX_ACTORS];   /* 0 = AG Bear, 1..2 = friends on stage */
+#define MAX_ACTORS 4
+static Actor actors[MAX_ACTORS];   /* 0 = AG Bear, 1..2 = friends on stage, 3 = Sid in the pond */
 #define ME (&actors[0])
 
 typedef struct { BOOL on; UWORD img; LONG x, y, vx, vy; UWORD life; } Particle;
@@ -174,19 +174,21 @@ static Actor *Friend(void)
     return NULL;
 }
 
-static Actor *NearestFriend(void)
+static Actor *NearestFriendOf(BOOL walkersOnly)
 {
     Actor *best = NULL;
     UWORD i;
     WORD bd = 32767;
     for (i = 1; i < MAX_ACTORS; i++)
-        if (actors[i].on) {
+        if (actors[i].on && (!walkersOnly || actors[i].speed)) {
             WORD d = actors[i].x - ME->x;
             if (d < 0) d = -d;
             if (d < bd) { bd = d; best = &actors[i]; }
         }
     return best;
 }
+
+#define NearestFriend() NearestFriendOf(FALSE)
 
 static void PlaceActor(Actor *a, UBYTE bear, WORD x)
 {
@@ -206,17 +208,17 @@ static void WalkTo(Actor *a, WORD x) { a->tx = Clamp(x, -BEAR_W, SCR_W); }
 static BOOL SaveTo(const char *name)
 {
     BPTR fh = Open((STRPTR)name, MODE_NEWFILE);
-    char buf[512];
+    char buf[600];
     LONG n;
     if (!fh) return FALSE;
     n = sprintf(buf,
         "AGBEARPET 2\nfood %d\nfun %d\nenergy %d\nclean %d\nhealth %d\ncoins %u\nhoney %u\ncake %u\n"
         "medi %u\ngifts %u\nball %u\nshades %u\nhat %u\ncrown %u\nwearshades %u\nwearhat %u\n"
-        "rosie %u\npip %u\nhoney_f %u\npoop %u\nsick %u\nvoice %u\nbestcatch %u\nbestmemory %u\n"
+        "rosie %u\npip %u\nhoney_f %u\nsid %u\npoop %u\nsick %u\nvoice %u\nbestcatch %u\nbestmemory %u\n"
         "born %lu\nseen %lu\n",
         pet.food, pet.fun, pet.energy, pet.clean, pet.health, pet.coins, pet.honey, pet.cake,
         pet.medi, pet.gifts, pet.ball, pet.shades, pet.hat, pet.crown, pet.wearShades, pet.wearHat,
-        pet.friend[1], pet.friend[2], pet.friend[3], pet.poop, pet.sick, pet.voiceOn,
+        pet.friend[1], pet.friend[2], pet.friend[3], pet.friend[4], pet.poop, pet.sick, pet.voiceOn,
         pet.bestCatch, pet.bestMemory, (unsigned long)pet.born, (unsigned long)Gfx_Seconds());
     n = Write(fh, buf, n) == n;
     Close(fh);
@@ -261,7 +263,7 @@ static BOOL LoadFrom(const char *name)
         K("health", pet.health) K("coins", pet.coins) K("honey", pet.honey) K("cake", pet.cake)
         K("medi", pet.medi) K("gifts", pet.gifts) K("ball", pet.ball) K("shades", pet.shades)
         K("hat", pet.hat) K("crown", pet.crown) K("wearshades", pet.wearShades) K("wearhat", pet.wearHat)
-        K("rosie", pet.friend[1]) K("pip", pet.friend[2]) K("honey_f", pet.friend[3]) K("poop", pet.poop)
+        K("rosie", pet.friend[1]) K("pip", pet.friend[2]) K("honey_f", pet.friend[3]) K("sid", pet.friend[4]) K("poop", pet.poop)
         K("sick", pet.sick) K("voice", pet.voiceOn) K("bestcatch", pet.bestCatch)
         K("bestmemory", pet.bestMemory) K("born", pet.born) K("seen", pet.lastSeen)
 #undef K
@@ -367,6 +369,8 @@ static void EnterScene(Scene s)
         UBYTE first = (UBYTE)(BEAR_ROSIE + Rnd(2));
         PlaceActor(&actors[1], first, 200 + Rnd(60));
         if (Rnd(3) == 0) PlaceActor(&actors[2], first == BEAR_ROSIE ? BEAR_PIP : BEAR_ROSIE, 140);
+        PlaceActor(&actors[3], BEAR_SID, 26);
+        actors[3].speed = 0;
         Say(&actors[1], first == BEAR_ROSIE ? "Hi AG Bear! It's me, Rosie!" : "Hey AG Bear! Pip here!");
     } else if (s == SC_SHOP) {
         PlaceActor(&actors[1], BEAR_HONEY, 246);
@@ -496,7 +500,7 @@ static void DoAction(Action a)
         WalkTo(ME, f->x > ME->x ? f->x - 52 : f->x + 52);
         break;
     case A_TOGETHER:
-        if (!(f = NearestFriend())) { Say(ME, "Nobody to play with here."); break; }
+        if (!(f = NearestFriendOf(TRUE))) { Say(ME, "Nobody to play with here."); break; }
         if (pet.energy < 10) { SayMood(ME, "I'm too tired to play.", SG_NO); break; }
         act = ACT_TOGETHER; actT = 0; actStage = 0;
         friendSlot = (UBYTE)(f - actors);
@@ -898,7 +902,11 @@ static void UpdateActivity(void)
         if (actStage == 1 && actT == 45) {
             static const char *rep[] = { "Hi AG Bear! Nice to see you!", "Hello friend! Want to play?",
                                          "Hi! I like your fur today!", "Hello! Isn't the park lovely?" };
-            Say(f, rep[Rnd(4)]);
+            if (f->bear == BEAR_SID) {
+                static const char *arf[] = { "Arf arf! Hello AG Bear!", "Arf! Want to splash in my pond?",
+                                             "Arf arf arf! Fish are yummy!", "Splish splosh! Hi friend!" };
+                Say(f, arf[Rnd(4)]);
+            } else Say(f, rep[Rnd(4)]);
             if (pet.friend[f->bear] < 5 && Rnd(2) == 0) pet.friend[f->bear]++;
             Particle_Add(PET_PROP_HEART, f->x + 28, f->y, 0, -20, 30);
         }
@@ -1008,7 +1016,7 @@ static void HomeVisits(void)
         return;
     }
     if (v->on && v->x >= SCR_W) v->on = FALSE;
-    for (i = 1; i < NUM_BEARS; i++) if (pet.friend[i] > best) best = pet.friend[i];
+    for (i = BEAR_ROSIE; i <= BEAR_HONEY; i++) if (pet.friend[i] > best) best = pet.friend[i];
     if (best >= 3 && !v->on && Rnd(FPS * 90) == 0) {
         UBYTE who;
         do who = (UBYTE)(1 + Rnd(3)); while (pet.friend[who] < 3);
@@ -1202,20 +1210,20 @@ static void DrawStats(void)
     Gfx_Text(x + 10, y + 48, PEN_OUTLINE, "Friends");
     for (i = 1; i < NUM_BEARS; i++) {
         WORD h;
-        Gfx_Text(x + 20, y + 50 + i * 11, PEN_BLACK, bearName[i]);
+        Gfx_Text(x + 20, y + 47 + i * 10, PEN_BLACK, bearName[i]);
         for (h = 0; h < 5; h++)
-            if (h < pet.friend[i]) Gfx_Image(imgs[PET_PROP_HEART], x + 80 + h * 11, y + 50 + i * 11);
-            else Gfx_Fill(PEN_GREY, x + 82 + h * 11, y + 52 + i * 11, 5, 4);
+            if (h < pet.friend[i]) Gfx_Image(imgs[PET_PROP_HEART], x + 100 + h * 11, y + 47 + i * 10);
+            else Gfx_Fill(PEN_GREY, x + 102 + h * 11, y + 49 + i * 10, 5, 4);
     }
     sprintf(buf, "Bag: %u honey, %u cake, %u medicine", pet.honey, pet.cake, pet.medi);
-    Gfx_Text(x + 10, y + 96, PEN_BLACK, buf);
+    Gfx_Text(x + 10, y + 104, PEN_BLACK, buf);
     sprintf(buf, "     %u present%s", pet.gifts, pet.gifts == 1 ? "" : "s");
-    Gfx_Text(x + 10, y + 106, PEN_BLACK, buf);
+    Gfx_Text(x + 10, y + 113, PEN_BLACK, buf);
     sprintf(buf, "Toys:%s%s%s%s", pet.ball ? " ball" : "", pet.shades ? " shades" : "",
             pet.hat ? " hat" : "", pet.crown ? " crown" : "");
     if (!pet.ball && !pet.shades && !pet.hat && !pet.crown) strcat(buf, " none yet");
-    Gfx_Text(x + 10, y + 118, PEN_BLACK, buf);
-    Gfx_Text(x + 10, y + 132, PEN_OUTLINE, speechOK ? "Voice: narrator.device" : "Voice: bear noises");
+    Gfx_Text(x + 10, y + 124, PEN_BLACK, buf);
+    Gfx_Text(x + 10, y + 137, PEN_OUTLINE, speechOK ? "Voice: narrator.device" : "Voice: bear noises");
 }
 
 static void DrawAll(void)
@@ -1291,14 +1299,42 @@ static BOOL LoadImages(void)
     UWORD i, b;
     for (i = 0; i < PET_NUM_IMAGES; i++) {
         BOOL scenes = (i >= PET_SCENE_HOME && i <= PET_SCENE_SHOP);
-        if (i < 8) continue;
+        if (i < 8 || i == PET_TITLE) continue;
         if (!(imgs[i] = Img_Unpack(&pet_images[i], pet_blob, 0, !scenes))) return FALSE;
     }
-    for (b = 0; b < NUM_BEARS; b++)
+    for (b = 0; b < BEAR_SID; b++)
         for (i = 0; i < 8; i++)
             if (!(bearImg[b][i] = Img_Unpack(&pet_images[PET_BEAR0 + i], pet_blob, (UBYTE)(b * PET_BEAR_COLS), TRUE)))
                 return FALSE;
+    for (i = 0; i < 8; i++)   /* Sid has two pictures: mouth shut and open */
+        if (!(bearImg[BEAR_SID][i] = Img_Unpack(&pet_images[i == F_TALK ? PET_SEAL_1 : PET_SEAL_0], pet_blob, 0, TRUE)))
+            return FALSE;
     return TRUE;
+}
+
+/* the title screen: the photo of AG Bear and friends, until a click, a key or fire (or 12 s) */
+static void TitleScreen(void)
+{
+    Img *t = Img_Unpack(&pet_images[PET_TITLE], pet_blob, 0, FALSE);
+    UWORD n, l;
+    if (!t) return;
+    Gfx_LoadPalette(pet_title_palette, 0, 0);
+    Gfx_Begin();
+    Gfx_Image(t, 0, 0);
+    Gfx_End();
+    for (l = 0; l <= 256; l += 16) { Gfx_LoadPalette(pet_title_palette, l, 0); WaitTOF(); }
+    Snd_PlayGroup(SG_GREETING, 256);
+    for (n = 0; n < 12 * FPS && !quitting; n++) {
+        Gfx_Poll(&in);
+        Snd_Update();
+        if (in.click || in.firePressed || in.key || in.quit) break;
+        Gfx_WaitFrame();
+    }
+    for (l = 256; l > 0; l -= 32) { Gfx_LoadPalette(pet_title_palette, l, 0); WaitTOF(); }
+    Gfx_LoadPalette(pet_title_palette, 0, 0);
+    Gfx_Invalidate();
+    Img_Free(t);
+    in.click = FALSE;
 }
 
 static void FreeImages(void)
@@ -1327,6 +1363,8 @@ int main(void)
     Snd_Init();
     speechOK = Speech_Init();
     if (!speechOK) Speech_Close();
+    TitleScreen();
+    Gfx_LoadPalette(pet_palette, 0, 0);
     EnterScene(SC_HOME);
     LoadPet();
     {

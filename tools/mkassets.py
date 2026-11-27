@@ -254,12 +254,19 @@ def build_pet():
     poop = load_rgba(ROOT / "poop.png").resize((14, 14), Image.LANCZOS)
     props.append(("prop-poop", poop))
     flat = [im for _, im in props + icons] + [scenes[2][1], scenes[3][1]]
-    rest_pal = quantize(opaque_pixels(flat + [scenes[0][1], scenes[1][1]]), 124)
+    rest_pal = quantize(opaque_pixels(flat + [scenes[0][1], scenes[1][1]]), 108)
+    seal = [art("seal-0"), art("seal-1")]
+    seal_pal = quantize(opaque_pixels(seal), 16)
     parts = [(20, bear_pal, BEAR_COLS)]
     for i, (_, hue, sm, sa, vm) in enumerate(FRIENDS):
         parts.append((20 + BEAR_COLS * (i + 1), recolour(bear_pal, hue, sm, sa, vm), BEAR_COLS))
-    parts.append((132, rest_pal, 124))
+    parts.append((132, rest_pal, 108))
+    parts.append((240, seal_pal, 16))
     palette = full_palette(parts)
+    # the title screen has a palette of its own (loaded only while it is shown)
+    title = art("title")
+    title_pal = quantize(opaque_pixels([title]), 236)
+    title_palette = full_palette([(20, title_pal, 236)])
 
     blob = Blob("pet")
     for f, im in enumerate(frames):
@@ -268,9 +275,16 @@ def build_pet():
         blob.add(f"scene-{n}", map_image(im, rest_pal, 132))
     for n, im in props + icons:
         blob.add(n, map_image(im, rest_pal, 132))
+    blob.add("seal-0", map_image(seal[0], seal_pal, 240, dither=True))
+    blob.add("seal-1", map_image(seal[1], seal_pal, 240, dither=True))
+    blob.add("title", map_image(title, title_pal, 20, dither=True))
     extra_h = (f"#define PET_BEAR_COLS {BEAR_COLS}\n#define PET_BEAR_BASE 20\n#define PET_BEAR_SIZE {BEAR_SIZE}\n"
-               f"#define PET_ART_BASE 132\n")
-    blob.write(palette, extra_h)
+               f"#define PET_ART_BASE 132\nextern const ULONG pet_title_palette[256];\n")
+    extra_c = ["const ULONG pet_title_palette[256] = {"]
+    for i in range(0, 256, 8):
+        extra_c.append("  " + ", ".join(f"0x{rgb_int(c):06X}" for c in title_palette[i:i + 8]) + ",")
+    extra_c.append("};")
+    blob.write(palette, extra_h, "\n".join(extra_c))
     return palette
 
 
@@ -353,9 +367,31 @@ TALK_ITEMS = ["talk-glasses-cool", "talk-glasses-hearts", "talk-glasses-star", "
 TALK_ICONS = ["voice", "dance", "hi", "tickle", "game", "save", "quit", "together"]
 
 
+def character_photos():
+    """(closed RGBA, open RGBA, anchors) for every Talker character; [0] is the original AG Bear."""
+    import sys
+    sys.path.insert(0, str(ROOT / "tools"))
+    from characters import CHARACTERS
+    from PIL import ImageDraw
+    p = talk_photos()
+    out = [(p["closed"], p["open"], dict(hat=(90, 24), glasses=(90, 47), tash=(86, 96), bow=(90, 152)))]
+    for c in CHARACTERS:
+        im = Image.open(ART / "photos" / c["file"]).convert("RGBA").crop(c["crop"])
+        h = round(im.height * TALK_PHOTO_W / im.width)
+        im = im.resize((TALK_PHOTO_W, min(h, TALK_STAGE_H)), Image.LANCZOS) if h <= TALK_STAGE_H else \
+            im.resize((TALK_PHOTO_W, h), Image.LANCZOS).crop((0, 0, TALK_PHOTO_W, TALK_STAGE_H))
+        x0, y0, x1, y1 = c["jaw"]
+        d = c["drop"]
+        op = im.copy()
+        jaw = im.crop((x0, y0, x1, y1))
+        ImageDraw.Draw(op).ellipse((x0 + 3, y0 - 1, x1 - 3, y0 + d * 2), fill=(64, 24, 24, 255))
+        op.alpha_composite(jaw, (x0, y0 + d))
+        out.append((im, op, c))
+    return out
+
+
 def build_talk():
-    photos = talk_photos()
-    photo_pal = quantize(opaque_pixels([photos["closed"], photos["open"]]), 160)
+    chars = character_photos()
     backs = [("home", talk_backdrop(ROOT / "bg.png", 20, 240)),
              ("park", talk_backdrop(ART / "scene-park.png", 0, 216)),
              ("house", talk_backdrop(ROOT / "outside-house.png", 20, 240)),
@@ -370,32 +406,54 @@ def build_talk():
         items.append((n, im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS)))
     icons = [(f"icon-{n}", art(f"icon-{n}")) for n in TALK_ICONS]
     rest_pal = quantize(opaque_pixels([im for _, im in items + icons + backs]), 60)
-    palette = full_palette([(20, photo_pal, 160), (196, rest_pal, 60)])
 
     blob = Blob("talk")
-    # the photo: the full closed-mouth picture plus the open mouth as a patch
-    closed = map_image(photos["closed"], photo_pal, 20, dither=True)
-    opened = map_image(photos["open"], photo_pal, 20, dither=True)
-    diff = np.argwhere(closed != opened)
-    y0, x0 = diff.min(axis=0)
-    y1, x1 = diff.max(axis=0)
-    blob.add("photo", closed)
-    blob.add("mouth-open", opened[y0:y1 + 1, x0:x1 + 1])
-    blob.add("mouth-closed", closed[y0:y1 + 1, x0:x1 + 1])
+    table, furs = [], []
+    first_pal = None
+    # each character: its picture, the open and closed mouth as patches, its own 160-colour palette
+    for i, (closed_im, open_im, anc) in enumerate(chars):
+        pal = quantize(opaque_pixels([closed_im, open_im]), 160)
+        first_pal = first_pal or pal
+        closed = map_image(closed_im, pal, 20, dither=True)
+        opened = map_image(open_im, pal, 20, dither=True)
+        if "jaw" in anc:   # keep only the jaw area (dithering differs a little everywhere else)
+            jx0, jy0, jx1, jy1 = anc["jaw"]
+            keep = closed.copy()
+            ys, xs = slice(max(jy0 - 2, 0), min(jy1 + anc["drop"] + 2, closed.shape[0])), slice(jx0, jx1)
+            keep[ys, xs] = opened[ys, xs]
+            opened = keep
+        diff = np.argwhere(closed != opened)
+        y0, x0 = diff.min(axis=0)
+        y1, x1 = diff.max(axis=0)
+        base = len(blob.images)
+        blob.add(f"char{i}-photo", closed)
+        blob.add(f"char{i}-open", opened[y0:y1 + 1, x0:x1 + 1])
+        blob.add(f"char{i}-closed", closed[y0:y1 + 1, x0:x1 + 1])
+        py = TALK_STAGE_H - closed.shape[0]
+        table.append([base, base + 1, base + 2, x0, y0, py, *anc["hat"], *anc["glasses"], *anc["bow"], *anc["tash"]])
+        furs.append(fur_palettes(pal))
+    palette = full_palette([(20, first_pal, 160), (196, rest_pal, 60)])
     for n, im in backs:
         blob.add(f"back-{n}", map_image(im, rest_pal, 196))
     for n, im in items + icons:
         blob.add(n, map_image(im, rest_pal, 196))
-    furs = fur_palettes(photo_pal)
-    extra_h = (f"#define TALK_MOUTH_X {x0}\n#define TALK_MOUTH_Y {y0}\n#define TALK_STAGE {TALK_STAGE}\n"
-               f"#define TALK_STAGE_H {TALK_STAGE_H}\n#define TALK_PHOTO_SCALE_1000 {round(TALK_PHOTO_W * 1000 / 300)}\n"
-               f"#define TALK_NUM_FURS {len(furs)}\n#define TALK_RAINBOW_FIRST {len(FURS)}\n"
-               f"extern const ULONG talk_furs[TALK_NUM_FURS][160];\n"
+    nf = len(furs[0])
+    extra_h = (f"#define TALK_STAGE {TALK_STAGE}\n#define TALK_STAGE_H {TALK_STAGE_H}\n"
+               f"#define TALK_NUM_CHARS {len(chars)}\n#define TALK_NUM_FURS {nf}\n#define TALK_RAINBOW_FIRST {len(FURS)}\n"
+               "/* photo, open, closed, mouthX, mouthY, photoY, hatX, hatBottom, glassesX, glassesY, bowX, bowY, tashX, tashY */\n"
+               f"extern const WORD talk_chars[TALK_NUM_CHARS][14];\n"
+               f"extern const ULONG talk_furs[TALK_NUM_CHARS][TALK_NUM_FURS][160];\n"
                f"#define TALK_PHOTO_BASE 20\n#define TALK_PHOTO_COLS 160\n#define TALK_CYCLE_BASE 180\n"
                f"#define TALK_ART_BASE 196\n")
-    extra_c = ["const ULONG talk_furs[TALK_NUM_FURS][160] = {"]
-    for f in furs:
-        extra_c.append("  {" + ",".join(f"0x{v:06X}" for v in f) + "},")
+    extra_c = [f"const WORD talk_chars[TALK_NUM_CHARS][14] = {{"]
+    for t in table:
+        extra_c.append("  {" + ", ".join(str(int(v)) for v in t) + "},")
+    extra_c += ["};", "const ULONG talk_furs[TALK_NUM_CHARS][TALK_NUM_FURS][160] = {"]
+    for fc in furs:
+        extra_c.append(" {")
+        for f in fc:
+            extra_c.append("  {" + ",".join(f"0x{v:06X}" for v in f) + "},")
+        extra_c.append(" },")
     extra_c.append("};")
     blob.write(palette, extra_h, "\n".join(extra_c))
 

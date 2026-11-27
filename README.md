@@ -12,7 +12,8 @@ Two programs for an AGA Amiga (A1200/A4000) or an Amiga with a graphics card, Am
   Catch the honey game), and shop at Honey's shop for food, medicine, a ball, presents, sunglasses
   and a party hat. Friends visit when they like him enough; a golden crown can be won.
 - **AG Bear Talker** (`src/talker/agbeartalker.c`) - type something and AG Bear says it, with his
-  real moving mouth. Dress him up (hats, glasses, bow ties, a moustache), change his fur colour
+  real moving mouth - or Party Bear, Professor Bear, Ted or Sid the Seal (photos in `art/photos`,
+  set up in `tools/characters.py`). Dress him up (hats, glasses, bow ties, a moustache), change his fur colour
   (including Rainbow), the backdrop (including Disco and Space) and his voice; jokes, a song, a
   surprise outfit button and photos saved to RAM: as IFF pictures.
 
