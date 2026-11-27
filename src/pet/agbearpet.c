@@ -39,18 +39,21 @@ static const char stack[] __attribute__((used)) = "$STACK:32768";
 enum { F_FRONT = 0, F_TALK, F_WAVE, F_BACK, F_WR0, F_WR1, F_WL0, F_WL1 };
 
 enum { BEAR_AG = 0, BEAR_ROSIE, BEAR_PIP, BEAR_HONEY, BEAR_SID,
-       BEAR_STARFISH, BEAR_FUDGIE, BEAR_GRANDMAW, BEAR_HULIHOOP, NUM_BEARS };
+       BEAR_STARFISH, BEAR_FUDGIE, BEAR_GRANDMAW, BEAR_HULIHOOP, BEAR_LONGNOSE, BEAR_TIM, NUM_BEARS };
 static const char *bearName[NUM_BEARS] = { "AG Bear", "Rosie", "Pip", "Honey", "Sid Seal",
-                                           "Starfish", "Fudgie", "Grandmaw", "HuliHoop" };
+                                           "Starfish", "Fudgie", "Grandmaw", "HuliHoop", "Long Nose", "Tim" };
 /* the bears from the owner's photos (two pictures each: mouth shut and open), from BEAR_SID on */
-static const UWORD photoImg[] = { PET_SEAL_0, PET_STARFISH_0, PET_FUDGIE_0, PET_GRANDMAW_0, PET_HULIHOOP_0 };
+static const UWORD photoImg[] = { PET_SEAL_0, PET_STARFISH_0, PET_FUDGIE_0, PET_GRANDMAW_0, PET_HULIHOOP_0,
+                                  PET_LONGNOSE_0, PET_TIM_0 };
 #define N_PARK (sizeof(parkBears) / sizeof(parkBears[0]))
 #define IS_PHOTO(b) ((b) >= BEAR_SID)
 /* friends who walk about in the park and come visiting */
-static const UBYTE parkBears[] = { BEAR_ROSIE, BEAR_PIP, BEAR_STARFISH, BEAR_FUDGIE, BEAR_GRANDMAW, BEAR_HULIHOOP };
+static const UBYTE parkBears[] = { BEAR_ROSIE, BEAR_PIP, BEAR_STARFISH, BEAR_FUDGIE, BEAR_GRANDMAW, BEAR_HULIHOOP,
+                                   BEAR_LONGNOSE };
 static const char *parkHello[NUM_BEARS] = { NULL, "Hi AG Bear! It's me, Rosie!", "Hey AG Bear! Pip here!", NULL, NULL,
     "Hello AG Bear! I'm Starfish!", "Fudgie Arms here! Come for a hug!",
-    "Hello dearie! It's Original Grandmaw.", "Hula hoop! HuliHoop is here!" };
+    "Hello dearie! It's Original Grandmaw.", "Hula hoop! HuliHoop is here!",
+    "Sniff sniff! Long Nose here!", NULL };
 
 typedef enum { SC_HOME, SC_GARDEN, SC_PARK, SC_SHOP, NUM_SCENES } Scene;
 
@@ -98,7 +101,8 @@ typedef struct {
 } Actor;
 
 #define MAX_ACTORS 4
-static Actor actors[MAX_ACTORS];   /* 0 = AG Bear, 1..2 = friends on stage, 3 = Sid in the pond */
+static Actor actors[MAX_ACTORS];   /* 0 = AG Bear, 1..2 = friends on stage, 3 = Sid in the pond / Tim at home */
+#define TIM (&actors[3])
 #define ME (&actors[0])
 
 typedef struct { BOOL on; UWORD img; LONG x, y, vx, vy; UWORD life; } Particle;
@@ -225,12 +229,12 @@ static BOOL SaveTo(const char *name)
     n = sprintf(buf,
         "AGBEARPET 2\nfood %d\nfun %d\nenergy %d\nclean %d\nhealth %d\ncoins %u\nhoney %u\ncake %u\n"
         "medi %u\ngifts %u\nball %u\nshades %u\nhat %u\ncrown %u\nwearshades %u\nwearhat %u\n"
-        "rosie %u\npip %u\nhoney_f %u\nsid %u\nstarfish %u\nfudgie %u\ngrandmaw %u\nhulihoop %u\npoop %u\nsick %u\nvoice %u\nbestcatch %u\nbestmemory %u\n"
+        "rosie %u\npip %u\nhoney_f %u\nsid %u\nstarfish %u\nfudgie %u\ngrandmaw %u\nhulihoop %u\nlongnose %u\ntim %u\npoop %u\nsick %u\nvoice %u\nbestcatch %u\nbestmemory %u\n"
         "born %lu\nseen %lu\n",
         pet.food, pet.fun, pet.energy, pet.clean, pet.health, pet.coins, pet.honey, pet.cake,
         pet.medi, pet.gifts, pet.ball, pet.shades, pet.hat, pet.crown, pet.wearShades, pet.wearHat,
         pet.friend[1], pet.friend[2], pet.friend[3], pet.friend[4], pet.friend[5], pet.friend[6],
-        pet.friend[7], pet.friend[8], pet.poop, pet.sick, pet.voiceOn,
+        pet.friend[7], pet.friend[8], pet.friend[9], pet.friend[10], pet.poop, pet.sick, pet.voiceOn,
         pet.bestCatch, pet.bestMemory, (unsigned long)pet.born, (unsigned long)Gfx_Seconds());
     n = Write(fh, buf, n) == n;
     Close(fh);
@@ -277,7 +281,7 @@ static BOOL LoadFrom(const char *name)
         K("hat", pet.hat) K("crown", pet.crown) K("wearshades", pet.wearShades) K("wearhat", pet.wearHat)
         K("rosie", pet.friend[1]) K("pip", pet.friend[2]) K("honey_f", pet.friend[3]) K("sid", pet.friend[4])
         K("starfish", pet.friend[5]) K("fudgie", pet.friend[6]) K("grandmaw", pet.friend[7])
-        K("hulihoop", pet.friend[8]) K("poop", pet.poop)
+        K("hulihoop", pet.friend[8]) K("longnose", pet.friend[9]) K("tim", pet.friend[10]) K("poop", pet.poop)
         K("sick", pet.sick) K("voice", pet.voiceOn) K("bestcatch", pet.bestCatch)
         K("bestmemory", pet.bestMemory) K("born", pet.born) K("seen", pet.lastSeen)
 #undef K
@@ -395,6 +399,8 @@ static void EnterScene(Scene s)
         actors[1].speed = 0;
         Say(&actors[1], "Welcome to Honey's shop!");
     } else if (s == SC_HOME) {
+        PlaceActor(TIM, BEAR_TIM, 236);   /* Tim the cat lives at home */
+        TIM->speed = 1;
         Say(ME, "Home sweet home!");
     } else {
         Say(ME, "What a lovely day!");
@@ -924,11 +930,12 @@ static void UpdateActivity(void)
                                              "Arf arf arf! Fish are yummy!", "Splish splosh! Hi friend!" };
                 Say(f, arf[Rnd(4)]);
             } else if (f->bear >= BEAR_STARFISH) {
-                static const char *own[4][2] = {
+                static const char *own[5][2] = {
                     { "Look at the stars on my jumper!", "Twinkle twinkle, AG Bear!" },
                     { "Big fudgy hug for you!", "My cardigan keeps me cosy!" },
                     { "Hello dearie! Have you eaten?", "Do you like the flowers on my hat?" },
-                    { "Hula hoop! Let's spin round!", "I love my furry scarf!" } };
+                    { "Hula hoop! Let's spin round!", "I love my furry scarf!" },
+                    { "Sniff sniff! I smell honey!", "My nose is the longest in the park!" } };
                 Say(f, Rnd(2) ? own[f->bear - BEAR_STARFISH][Rnd(2)] : rep[Rnd(4)]);
             } else Say(f, rep[Rnd(4)]);
             if (pet.friend[f->bear] < 5 && Rnd(2) == 0) pet.friend[f->bear]++;
@@ -1040,10 +1047,10 @@ static void HomeVisits(void)
         return;
     }
     if (v->on && v->x >= SCR_W) v->on = FALSE;
-    for (i = BEAR_ROSIE; i < NUM_BEARS; i++) if (i != BEAR_SID && pet.friend[i] > best) best = pet.friend[i];
+    for (i = BEAR_ROSIE; i < NUM_BEARS; i++) if (i != BEAR_SID && i != BEAR_TIM && pet.friend[i] > best) best = pet.friend[i];
     if (best >= 3 && !v->on && Rnd(FPS * 90) == 0) {
         UBYTE who;
-        do who = (UBYTE)(1 + Rnd(NUM_BEARS - 1)); while (who == BEAR_SID || pet.friend[who] < 3);
+        do who = (UBYTE)(1 + Rnd(NUM_BEARS - 1)); while (who == BEAR_SID || who == BEAR_TIM || pet.friend[who] < 3);
         PlaceActor(v, who, SCR_W);
         WalkTo(v, 200);
         visitT = 450;
@@ -1071,6 +1078,11 @@ static void Update(void)
     }
     if (scene == SC_PARK && act != ACT_TOGETHER && act != ACT_GREET && act != ACT_GIFT)
         for (i = 1; i < MAX_ACTORS; i++) Wander(&actors[i], 110, 250);
+    if (scene == SC_HOME && TIM->on) {
+        static const char *meow[] = { "Meow!", "Purr purr purr...", "Meow? Is it dinner time?", "Mrrrow!" };
+        Wander(TIM, 150, 256);
+        if (!Busy() && !TIM->sayT && Rnd(FPS * 40) == 0) Say(TIM, meow[Rnd(4)]);
+    }
     HomeVisits();
 }
 
@@ -1121,7 +1133,7 @@ static void DrawActor(const Actor *a, WORD clipBottom)
     WORD x = a->x, y = a->y + a->hop;
     WORD h = BEAR_H;
     if (IS_PHOTO(a->bear) && (a->dir == 1 || a->dir == 2)) y -= (WORD)(((a->anim >> 2) & 1) * 2);   /* a waddle */
-    static const BYTE shX[8] = { 18, 18, 18, -1, 30, 30, 24, 24 }, shY[8] = { 12, 12, 12, 0, 10, 10, 10, 10 };
+    static const BYTE shX[8] = { 16, 16, 16, -1, 30, 30, 24, 24 }, shY[8] = { 7, 7, 7, 0, 6, 6, 6, 6 };
     static const BYTE hatCX[8] = { 34, 34, 34, 31, 32, 32, 29, 29 }, hatB[8] = { 5, 5, 5, 4, 4, 4, 4, 4 };
     if (!a->on) return;
     if (clipBottom && y + h > clipBottom) h = clipBottom - y;
@@ -1233,22 +1245,22 @@ static void DrawStats(void)
     sprintf(buf, "Best memory level %u", pet.bestMemory);
     Gfx_Text(x + 10, y + 32, PEN_BLACK, buf);
     Gfx_Text(x + 10, y + 48, PEN_OUTLINE, "Friends");
-    for (i = 1; i < NUM_BEARS; i++) {   /* two columns of four */
-        WORD h, cx = x + (i <= 4 ? 14 : 150), cy = y + 47 + ((i - 1) % 4 + 1) * 10;
+    for (i = 1; i < NUM_BEARS; i++) {   /* two columns of five */
+        WORD h, cx = x + (i <= 5 ? 14 : 150), cy = y + 47 + ((i - 1) % 5 + 1) * 10;
         Gfx_Text(cx, cy, PEN_BLACK, bearName[i]);
         for (h = 0; h < 5; h++)
             if (h < pet.friend[i]) Gfx_Image(imgs[PET_PROP_HEART], cx + 72 + h * 11, cy);
             else Gfx_Fill(PEN_GREY, cx + 74 + h * 11, cy + 2, 5, 4);
     }
     sprintf(buf, "Bag: %u honey, %u cake, %u medicine", pet.honey, pet.cake, pet.medi);
-    Gfx_Text(x + 10, y + 104, PEN_BLACK, buf);
+    Gfx_Text(x + 10, y + 110, PEN_BLACK, buf);
     sprintf(buf, "     %u present%s", pet.gifts, pet.gifts == 1 ? "" : "s");
-    Gfx_Text(x + 10, y + 113, PEN_BLACK, buf);
+    Gfx_Text(x + 10, y + 119, PEN_BLACK, buf);
     sprintf(buf, "Toys:%s%s%s%s", pet.ball ? " ball" : "", pet.shades ? " shades" : "",
             pet.hat ? " hat" : "", pet.crown ? " crown" : "");
     if (!pet.ball && !pet.shades && !pet.hat && !pet.crown) strcat(buf, " none yet");
-    Gfx_Text(x + 10, y + 124, PEN_BLACK, buf);
-    Gfx_Text(x + 10, y + 137, PEN_OUTLINE, speechOK ? "Voice: narrator.device" : "Voice: bear noises");
+    Gfx_Text(x + 10, y + 129, PEN_BLACK, buf);
+    Gfx_Text(x + 10, y + 140, PEN_OUTLINE, speechOK ? "Voice: narrator.device" : "Voice: bear noises");
 }
 
 static void DrawAll(void)
@@ -1311,6 +1323,18 @@ static void HandleInput(void)
             AddStat(&pet.fun, 3);
             SayMood(ME, tickle[Rnd(4)], SG_HAPPY);
             for (i = 0; i < 3; i++) Particle_Add(PET_PROP_HEART, ME->x + 16 + i * 14, ME->y + 4, (i - 1) * 6, -18, 24);
+            return;
+        }
+        /* clicking Tim the cat: a stroke */
+        if (scene == SC_HOME && TIM->on && in.my < STAGE_H && in.mx >= TIM->x + 4 && in.mx < TIM->x + 60 &&
+            in.my >= TIM->y + 8 && in.my < TIM->y + BEAR_H) {
+            static const char *purr[] = { "Purr purr purr!", "Meow! More strokes please!", "Mrrrow! I love you, AG Bear!",
+                                          "Purrrrr..." };
+            TIM->waveT = 24; TIM->tx = NOWALK;
+            Say(TIM, purr[Rnd(4)]);
+            if (pet.friend[BEAR_TIM] < 5 && Rnd(3) == 0) pet.friend[BEAR_TIM]++;
+            AddStat(&pet.fun, 2);
+            Particle_Add(PET_PROP_HEART, TIM->x + 30, TIM->y + 8, 0, -18, 24);
             return;
         }
         if (in.my < STAGE_H && panel != P_MAIN) panel = P_MAIN;

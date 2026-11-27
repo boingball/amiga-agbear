@@ -21,4 +21,8 @@ CHARACTERS = [
          jaw=(58, 87, 92, 100), drop=6, hat=(72, 18), glasses=(66, 52), tash=(68, 80), bow=(74, 108)),
     dict(name="hulihoop", file="hulihoop.png", crop=(0, 0, 2322, 2576),
          jaw=(62, 89, 100, 102), drop=6, hat=(90, 22), glasses=(82, 46), tash=(80, 76), bow=(84, 118)),
+    dict(name="longnose", file="long-nose.png", crop=(0, 0, 2380, 2576),
+         jaw=(68, 80, 102, 94), drop=5, hat=(88, 10), glasses=(86, 46), tash=(90, 74), bow=(90, 100)),
+    dict(name="tim", file="tim-cat.png", crop=(0, 0, 2443, 2299),
+         jaw=(72, 128, 128, 142), drop=6, hat=(100, 34), glasses=(98, 96), tash=(98, 120), bow=(100, 160)),
 ]

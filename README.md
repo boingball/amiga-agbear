@@ -8,12 +8,13 @@ Two programs for an AGA Amiga (A1200/A4000) or an Amiga with a graphics card, Am
 
 - **AG Bear Pet** (`src/pet/agbearpet.c`) - the AG Bear Tamagotchi, expanded: look after AG Bear at
   home (feed, bath, nap, medicine, balloon memory game, dress up), play fetch and have picnics in the
-  garden, meet his friends Rosie, Pip, Starfish, Fudgie Arms, Original Grandmaw and HuliHoop in the park (say hello, play tag, give presents, swings, the
+  garden, meet his friends Rosie, Pip, Starfish, Fudgie Arms, Original Grandmaw, HuliHoop and Long Nose in the park
+  (and Tim the cat at home) (say hello, play tag, give presents, swings, the
   Catch the honey game), and shop at Honey's shop for food, medicine, a ball, presents, sunglasses
   and a party hat. Friends visit when they like him enough; a golden crown can be won.
 - **AG Bear Talker** (`src/talker/agbeartalker.c`) - type something and AG Bear says it, with his
   real moving mouth - or Party Bear, Professor Bear, Ted, Sid the Seal, Starfish, Fudgie Arms, Original
-  Grandmaw or HuliHoop (photos in `art/photos`,
+  Grandmaw, HuliHoop, Long Nose or Tim the cat (photos in `art/photos`,
   set up in `tools/characters.py`). Dress him up (hats, glasses, bow ties, a moustache), change his fur colour
   (including Rainbow), the backdrop (including Disco and Space) and his voice; jokes, a song, a
   surprise outfit button and photos saved to RAM: as IFF pictures.

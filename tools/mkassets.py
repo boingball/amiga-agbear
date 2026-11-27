@@ -245,7 +245,7 @@ PET_ICONS = ["feed", "wash", "nap", "medi", "game", "dress", "go", "menu", "home
              "item-shades", "item-partyhat", "item-crown", "item-medi"]
 
 
-PARK_BEARS = ["starfish", "fudgie", "grandmaw", "hulihoop"]   # as in tools/mkart.py
+PARK_BEARS = ["starfish", "fudgie", "grandmaw", "hulihoop", "longnose", "tim"]   # as in tools/mkart.py
 
 
 def build_pet():

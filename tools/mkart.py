@@ -774,7 +774,7 @@ def seal_frames():
     return out
 
 
-PARK_BEARS = ["starfish", "fudgie", "grandmaw", "hulihoop"]
+PARK_BEARS = ["starfish", "fudgie", "grandmaw", "hulihoop", "longnose", "tim"]
 
 
 def park_bear_frames(name):
@@ -785,9 +785,10 @@ def park_bear_frames(name):
     from characters import CHARACTERS
     c = next(c for c in CHARACTERS if c["name"] == name)
     src = Image.open(ART / "photos" / c["file"]).convert("RGBA").crop(c["crop"])
-    k = 64 / max(src.width, src.height)
+    box = 42 if name == "tim" else 64   # Tim is a cat's head: smaller than a bear
+    k = box / max(src.width, src.height)
     s = src.resize((max(1, round(src.width * k)), max(1, round(src.height * k))), Image.LANCZOS)
-    j = (64 / max(src.width, src.height)) / (180 / src.width)   # 180-wide coordinates -> 64 box
+    j = k / (180 / src.width)   # 180-wide coordinates -> the box
     x0, y0, x1, y1 = (round(v * j) for v in c["jaw"])
     d = max(2, round(c["drop"] * j))
     out = []
