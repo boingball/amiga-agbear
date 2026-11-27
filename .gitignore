@@ -8,3 +8,6 @@
 .vscode/
 build/
 dist/
+release/
+__pycache__/
+art/preview.png
