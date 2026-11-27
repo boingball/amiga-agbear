@@ -3,48 +3,60 @@
 #define TALK_DATA_H
 #include "../common/agb_gfx.h"
 
-#define TALK_PHOTO 0  /* 180x166 */
-#define TALK_MOUTH_OPEN 1  /* 116x71 */
-#define TALK_MOUTH_CLOSED 2  /* 116x71 */
-#define TALK_BACK_HOME 3  /* 228x216 */
-#define TALK_BACK_PARK 4  /* 228x216 */
-#define TALK_BACK_HOUSE 5  /* 228x216 */
-#define TALK_BACK_SHOP 6  /* 228x216 */
-#define TALK_BACK_SPACE 7  /* 228x216 */
-#define TALK_TALK_GLASSES_COOL 8  /* 98x28 */
-#define TALK_TALK_GLASSES_HEARTS 9  /* 98x28 */
-#define TALK_TALK_GLASSES_STAR 10  /* 98x28 */
-#define TALK_TALK_GLASSES_SPECS 11  /* 98x28 */
-#define TALK_TALK_HAT_PARTY 12  /* 44x58 */
-#define TALK_TALK_HAT_TOP 13  /* 80x58 */
-#define TALK_TALK_HAT_CROWN 14  /* 90x52 */
-#define TALK_TALK_HAT_CAP 15  /* 107x49 */
-#define TALK_TALK_HAT_WIZARD 16  /* 63x58 */
-#define TALK_TALK_HAT_FLOWER 17  /* 49x46 */
-#define TALK_TALK_BOW_RED 18  /* 52x26 */
-#define TALK_TALK_BOW_BLUE 19  /* 52x26 */
-#define TALK_TALK_BOW_SPOTS 20  /* 52x26 */
-#define TALK_TALK_MOUSTACHE 21  /* 57x18 */
-#define TALK_ICON_VOICE 22  /* 24x24 */
-#define TALK_ICON_DANCE 23  /* 24x24 */
-#define TALK_ICON_HI 24  /* 24x24 */
-#define TALK_ICON_TICKLE 25  /* 24x24 */
-#define TALK_ICON_GAME 26  /* 24x24 */
-#define TALK_ICON_SAVE 27  /* 24x24 */
-#define TALK_ICON_QUIT 28  /* 24x24 */
-#define TALK_ICON_TOGETHER 29  /* 24x24 */
-#define TALK_NUM_IMAGES 30
-extern const PackedImage talk_images[30];
+#define TALK_CHAR0_PHOTO 0  /* 180x166 */
+#define TALK_CHAR0_OPEN 1  /* 116x71 */
+#define TALK_CHAR0_CLOSED 2  /* 116x71 */
+#define TALK_CHAR1_PHOTO 3  /* 180x215 */
+#define TALK_CHAR1_OPEN 4  /* 58x37 */
+#define TALK_CHAR1_CLOSED 5  /* 58x37 */
+#define TALK_CHAR2_PHOTO 6  /* 180x205 */
+#define TALK_CHAR2_OPEN 7  /* 52x31 */
+#define TALK_CHAR2_CLOSED 8  /* 52x31 */
+#define TALK_CHAR3_PHOTO 9  /* 180x200 */
+#define TALK_CHAR3_OPEN 10  /* 48x35 */
+#define TALK_CHAR3_CLOSED 11  /* 48x35 */
+#define TALK_CHAR4_PHOTO 12  /* 180x158 */
+#define TALK_CHAR4_OPEN 13  /* 40x24 */
+#define TALK_CHAR4_CLOSED 14  /* 40x24 */
+#define TALK_BACK_HOME 15  /* 228x216 */
+#define TALK_BACK_PARK 16  /* 228x216 */
+#define TALK_BACK_HOUSE 17  /* 228x216 */
+#define TALK_BACK_SHOP 18  /* 228x216 */
+#define TALK_BACK_SPACE 19  /* 228x216 */
+#define TALK_TALK_GLASSES_COOL 20  /* 98x28 */
+#define TALK_TALK_GLASSES_HEARTS 21  /* 98x28 */
+#define TALK_TALK_GLASSES_STAR 22  /* 98x28 */
+#define TALK_TALK_GLASSES_SPECS 23  /* 98x28 */
+#define TALK_TALK_HAT_PARTY 24  /* 44x58 */
+#define TALK_TALK_HAT_TOP 25  /* 80x58 */
+#define TALK_TALK_HAT_CROWN 26  /* 90x52 */
+#define TALK_TALK_HAT_CAP 27  /* 107x49 */
+#define TALK_TALK_HAT_WIZARD 28  /* 63x58 */
+#define TALK_TALK_HAT_FLOWER 29  /* 49x46 */
+#define TALK_TALK_BOW_RED 30  /* 52x26 */
+#define TALK_TALK_BOW_BLUE 31  /* 52x26 */
+#define TALK_TALK_BOW_SPOTS 32  /* 52x26 */
+#define TALK_TALK_MOUSTACHE 33  /* 57x18 */
+#define TALK_ICON_VOICE 34  /* 24x24 */
+#define TALK_ICON_DANCE 35  /* 24x24 */
+#define TALK_ICON_HI 36  /* 24x24 */
+#define TALK_ICON_TICKLE 37  /* 24x24 */
+#define TALK_ICON_GAME 38  /* 24x24 */
+#define TALK_ICON_SAVE 39  /* 24x24 */
+#define TALK_ICON_QUIT 40  /* 24x24 */
+#define TALK_ICON_TOGETHER 41  /* 24x24 */
+#define TALK_NUM_IMAGES 42
+extern const PackedImage talk_images[42];
 extern const UBYTE talk_blob[];
 extern const ULONG talk_palette[256];
-#define TALK_MOUTH_X 38
-#define TALK_MOUTH_Y 95
 #define TALK_STAGE 228
 #define TALK_STAGE_H 216
-#define TALK_PHOTO_SCALE_1000 600
+#define TALK_NUM_CHARS 5
 #define TALK_NUM_FURS 19
 #define TALK_RAINBOW_FIRST 7
-extern const ULONG talk_furs[TALK_NUM_FURS][160];
+/* photo, open, closed, mouthX, mouthY, photoY, hatX, hatBottom, glassesX, glassesY, bowX, bowY, tashX, tashY */
+extern const WORD talk_chars[TALK_NUM_CHARS][14];
+extern const ULONG talk_furs[TALK_NUM_CHARS][TALK_NUM_FURS][160];
 #define TALK_PHOTO_BASE 20
 #define TALK_PHOTO_COLS 160
 #define TALK_CYCLE_BASE 180

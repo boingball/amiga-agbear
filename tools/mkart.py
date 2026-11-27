@@ -715,6 +715,65 @@ def space_back():
     return im
 
 
+FONT = "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf"
+
+
+def outlined_text(im, xy, text, size, fill, outline=OL, width=3, anchor="mt"):
+    from PIL import ImageFont
+    try:
+        font = ImageFont.truetype(FONT, size)
+    except OSError:
+        font = ImageFont.load_default(size)
+    d = ImageDraw.Draw(im)
+    d.text(xy, text, font=font, fill=fill, anchor=anchor, stroke_width=width, stroke_fill=outline)
+
+
+def title():
+    """The Pet's title screen (320x256): the owner's photo of four AG Bears under a big title."""
+    im, d = canvas(320, 256, SKY)
+    for y in range(0, 150):                       # sky getting lighter towards the horizon
+        t = y / 150
+        c = tuple(round(SKY2[i] * (1 - t) + CREAM[i] * t * 0.35 + SKY2[i] * t * 0.65) for i in range(3))
+        d.line([(0, y), (319, y)], fill=c)
+    for a in range(0, 360, 20):                   # sun rays behind the title
+        ang = math.radians(a)
+        d.polygon([(160, 40), (160 + 260 * math.cos(ang), 40 + 260 * math.sin(ang)),
+                   (160 + 260 * math.cos(ang + 0.17), 40 + 260 * math.sin(ang + 0.17))], fill=(0xC8, 0xEC, 0xF6))
+    cloud(d, 14, 70, 0.9)
+    cloud(d, 262, 82, 0.8)
+    d.ellipse((-60, 150, 380, 330), fill=GRASS, outline=OL)
+    rnd = random.Random(11)
+    for _ in range(40):
+        flower(d, rnd.randrange(4, 316), rnd.randrange(200, 254), rnd.choice((PINK, CREAM, RED, LILAC)))
+    group = Image.open(ART / "photos" / "bear-group.png").convert("RGBA")
+    w = 292
+    group = group.resize((w, round(group.height * w / group.width)), Image.LANCZOS)
+    im.alpha_composite(group, ((320 - w) // 2, 256 - group.height - 14))
+    outlined_text(im, (160, 4), "AG BEAR", 46, YELLOW, OL, 4)
+    outlined_text(im, (160, 50), "& FRIENDS", 20, PINK, OL, 3)
+    outlined_text(im, (160, 241), "Click or press fire to play!", 11, WHITE, OL, 2)
+    return im
+
+
+def seal_frames():
+    """Sid the Seal for the park pond, from the owner's photo: closed and open mouth (64x64)."""
+    src = Image.open(ART / "photos" / "seal.png").convert("RGBA")
+    w = 64
+    s = src.resize((w, round(src.height * w / src.width)), Image.LANCZOS)
+    out = []
+    for opened in (False, True):
+        f = Image.new("RGBA", (64, 64), CLEAR)
+        img = s.copy()
+        if opened:
+            x0, y0, x1, y1 = 12, 30, 28, 38
+            jaw = img.crop((x0, y0, x1, y1))
+            ImageDraw.Draw(img).ellipse((x0 + 2, y0 - 1, x1 - 2, y0 + 4), fill=(64, 24, 24, 255))
+            img.alpha_composite(jaw, (x0, y0 + 2))
+        f.alpha_composite(img, (0, 64 - img.height))
+        out.append(f)
+    return out
+
+
 def build():
     ART.mkdir(exist_ok=True)
     out = {}
@@ -748,6 +807,8 @@ def build():
         out[f"talk-bow-{b}"] = bowtie(b)
     out["talk-moustache"] = moustache()
     out["talk-back-space"] = space_back()
+    out["title"] = title()
+    out["seal-0"], out["seal-1"] = seal_frames()
     for name, fn in ICONS.items():
         out[f"icon-{name}"] = icon(fn)
     for name in ("honey", "apple", "cake", "ball", "gift"):

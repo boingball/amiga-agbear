@@ -476,6 +476,9 @@ void Gfx_End(void)
     MergeRects();
     for (i = 0; i < nRects; i++) Compose(&rects[i]);
     if (nRects) WaitBlit();
+    /* copy to the screen right after the vertical blank, so the beam never shows a half-copied
+       area (some bitplanes new, some old: a one-frame shimmer of wrong colours) */
+    WaitTOF();
     for (i = 0; i < nRects; i++) {
         const Rect *r = &rects[i];
         BltBitMapRastPort(workBM, r->x0, r->y0, g_win->RPort, r->x0, r->y0,
@@ -564,8 +567,7 @@ BOOL Gfx_Poll(AgbInput *in)
 
 void Gfx_WaitFrame(void)
 {
-    WaitTOF();
-    WaitTOF();
+    WaitTOF();     /* Gfx_End waited for the other one: 25 frames per second */
 }
 
 ULONG Gfx_Seconds(void)

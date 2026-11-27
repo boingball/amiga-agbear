@@ -36,19 +36,16 @@ static const char stack[] __attribute__((used)) = "$STACK:32768";
 #define LIMIT_H 237
 #define COL_X 229
 #define GAD_Y 239
-#define BTN_Y0 158
+#define BTN_Y0 156
 
-/* where things go on the photo (scaled photo coordinates) */
-#define GLASSES_CX 90
-#define GLASSES_CY 47
-#define HAT_CX 90
-#define HAT_BOTTOM 24
-#define BOW_CX 90
-#define BOW_CY 152
-#define TASH_CX 86
-#define TASH_CY 96
 
 typedef struct { const char *name; WORD img; } Choice;
+
+static const Choice whos[] = { { "AG Bear", 0 }, { "Party", 1 }, { "Prof", 2 }, { "Ted", 3 }, { "Sid Seal", 4 } };
+static const char *whoHello[] = { "Hello! I'm AG Bear!", "Party Bear here! Let's party!",
+    "Good day. I'm Professor Bear.", "Hiya! I'm Ted! Look at my tongue!", "Arf arf! I'm Sid the Seal!" };
+#define CH(i) (talk_chars[sel[R_WHO]][i])
+enum { C_PHOTO, C_OPEN, C_CLOSED, C_MX, C_MY, C_PY, C_HATX, C_HATB, C_GLX, C_GLY, C_BOWX, C_BOWY, C_TASHX, C_TASHY };
 
 static const Choice hats[] = { { "None", -1 }, { "Party", TALK_TALK_HAT_PARTY }, { "Top hat", TALK_TALK_HAT_TOP },
     { "Crown", TALK_TALK_HAT_CROWN }, { "Cap", TALK_TALK_HAT_CAP }, { "Wizard", TALK_TALK_HAT_WIZARD },
@@ -69,11 +66,12 @@ static const Choice voices[] = { { "Growly", 0 }, { "Normal", 0 }, { "AG Bear", 
     { "Robot", 0 }, { "Giant", 0 } };
 
 #define N(a) ((WORD)(sizeof(a) / sizeof(a[0])))
-enum { R_HAT, R_SPECS, R_BOW, R_TASH, R_FUR, R_BACK, R_VOICE, NUM_ROWS };
-static const char *rowName[NUM_ROWS] = { "Hat", "Glasses", "Bow tie", "Moustache", "Fur", "Backdrop", "Voice" };
-static const Choice *rowChoices[NUM_ROWS] = { hats, specs, bows, tashes, furs, backs, voices };
-static const WORD rowCount[NUM_ROWS] = { N(hats), N(specs), N(bows), N(tashes), N(furs), N(backs), N(voices) };
-static WORD sel[NUM_ROWS] = { 0, 0, 0, 0, 0, BK_SKY, V_NOISES };
+enum { R_WHO, R_HAT, R_SPECS, R_BOW, R_TASH, R_FUR, R_BACK, R_VOICE, NUM_ROWS };
+static const char *rowName[NUM_ROWS] = { "Who", "Hat", "Glasses", "Bow tie", "Moustache", "Fur", "Backdrop", "Voice" };
+static const Choice *rowChoices[NUM_ROWS] = { whos, hats, specs, bows, tashes, furs, backs, voices };
+static const WORD rowCount[NUM_ROWS] = { N(whos), N(hats), N(specs), N(bows), N(tashes), N(furs), N(backs), N(voices) };
+static WORD sel[NUM_ROWS] = { 0, 0, 0, 0, 0, 0, BK_SKY, V_NOISES };
+#define ROW_H 19
 
 enum { B_JOKE, B_SONG, B_MIX, B_GROWL, B_PHOTO, B_BYE, NUM_BTNS };
 static const UWORD btnIcon[NUM_BTNS] = { TALK_ICON_HI, TALK_ICON_DANCE, TALK_ICON_GAME, TALK_ICON_VOICE,
@@ -184,7 +182,7 @@ static void ApplyFur(void)
     WORD f = sel[R_FUR];
     CopyMem((APTR)talk_palette, pal, sizeof(pal));
     if (f == 7) f = TALK_RAINBOW_FIRST + (WORD)((frame / 3) % (TALK_NUM_FURS - TALK_RAINBOW_FIRST));
-    CopyMem((APTR)talk_furs[f], pal + TALK_PHOTO_BASE, TALK_PHOTO_COLS * sizeof(ULONG));
+    CopyMem((APTR)talk_furs[sel[R_WHO]][f], pal + TALK_PHOTO_BASE, TALK_PHOTO_COLS * sizeof(ULONG));
     /* disco backdrop pens */
     {
         static const ULONG disco[8] = { 0xFF4060, 0xFFA030, 0xFFE040, 0x60E060, 0x40C0FF, 0x6060FF, 0xC060FF, 0xFF60C0 };
@@ -198,6 +196,8 @@ static void Surprise(void)
 {
     static const char *ta[] = { "Ta-da! How do I look?", "New look! Do you like it?", "I feel fabulous!",
                                 "Wow, look at me!", "Surprise!" };
+    if (demo) sel[R_WHO] = (sel[R_WHO] + 1) % rowCount[R_WHO];
+    else if (Rnd(3) == 0) sel[R_WHO] = Rnd(rowCount[R_WHO]);
     sel[R_HAT] = Rnd(rowCount[R_HAT]);
     sel[R_SPECS] = Rnd(rowCount[R_SPECS]);
     sel[R_BOW] = Rnd(rowCount[R_BOW]);
@@ -314,6 +314,7 @@ static void ChangeRow(WORD r, WORD d)
     sel[r] = (sel[r] + d + rowCount[r]) % rowCount[r];
     idleT = 0;
     switch (r) {
+    case R_WHO: ApplyFur(); SayText(whoHello[sel[r]]); break;
     case R_HAT: SayText(hatLine[sel[r]]); break;
     case R_SPECS: SayText(sel[r] ? (sel[r] == 4 ? "Now I can read my books!" : "Looking cool!") : "Glasses off."); break;
     case R_BOW: SayText(sel[r] ? "Very smart!" : "No bow tie."); break;
@@ -355,33 +356,38 @@ static void Button(WORD b)
 static void DrawAccessory(const Choice *c, WORD sel1, WORD cx, WORD cy, BOOL bottomAnchor)
 {
     const Img *im;
-    WORD x, y;
+    WORD x, y, py = CH(C_PY);
     if (c[sel1].img < 0) return;
     im = imgs[c[sel1].img];
     x = PHOTO_X + cx - im->w / 2;
-    y = bottomAnchor ? PHOTO_Y + bob + cy - im->h : PHOTO_Y + bob + cy - im->h / 2;
-    if (y < 0) y = 0;
+    y = bottomAnchor ? py + bob + cy - im->h : py + bob + cy - im->h / 2;
+    if (!bottomAnchor && y < 0) y = 0;          /* hats may poke off the top of the screen */
     if (y + im->h > TALK_STAGE_H) y = TALK_STAGE_H - im->h;
     Gfx_Image(im, x, y);
 }
 
 static void DrawStage(void)
 {
-    WORD b = sel[R_BACK], i;
-    const Img *ph = imgs[TALK_PHOTO];
-    WORD visH = TALK_STAGE_H - PHOTO_Y - bob;
+    WORD b = sel[R_BACK], i, py = CH(C_PY) + bob;
+    const Img *ph = imgs[CH(C_PHOTO)];
+    WORD visH = TALK_STAGE_H - py;
     if (backs[b].img >= 0) Gfx_Image(imgs[backs[b].img], 0, 0);
     else if (b == BK_DISCO)
         for (i = 0; i < 16; i++) Gfx_Fill((UBYTE)(TALK_CYCLE_BASE + i), i * 15, 0, i == 15 ? TALK_STAGE - 225 : 15, TALK_STAGE_H);
     else Gfx_Fill(b == BK_PINK ? PEN_PINK : PEN_SKY, 0, 0, TALK_STAGE, TALK_STAGE_H);
-    Gfx_ImagePart(ph, 0, 0, ph->w, visH > ph->h ? ph->h : visH, PHOTO_X, PHOTO_Y + bob);
-    Gfx_Image(imgs[mouthOpen ? TALK_MOUTH_OPEN : TALK_MOUTH_CLOSED], PHOTO_X + TALK_MOUTH_X, PHOTO_Y + bob + TALK_MOUTH_Y);
-    DrawAccessory(tashes, sel[R_TASH], TASH_CX, TASH_CY, FALSE);
-    DrawAccessory(bows, sel[R_BOW], BOW_CX, BOW_CY, FALSE);
-    DrawAccessory(specs, sel[R_SPECS], GLASSES_CX, GLASSES_CY, FALSE);
-    DrawAccessory(hats, sel[R_HAT], HAT_CX, HAT_BOTTOM, TRUE);
+    Gfx_ImagePart(ph, 0, 0, ph->w, visH > ph->h ? ph->h : visH, PHOTO_X, py);
+    {
+        const Img *m = imgs[mouthOpen ? CH(C_OPEN) : CH(C_CLOSED)];
+        WORD my = py + CH(C_MY), mh = m->h;
+        if (my + mh > TALK_STAGE_H) mh = TALK_STAGE_H - my;
+        Gfx_ImagePart(m, 0, 0, m->w, mh, PHOTO_X + CH(C_MX), my);
+    }
+    DrawAccessory(tashes, sel[R_TASH], CH(C_TASHX), CH(C_TASHY), FALSE);
+    DrawAccessory(bows, sel[R_BOW], CH(C_BOWX), CH(C_BOWY), FALSE);
+    DrawAccessory(specs, sel[R_SPECS], CH(C_GLX), CH(C_GLY), FALSE);
+    DrawAccessory(hats, sel[R_HAT], CH(C_HATX), CH(C_HATB), TRUE);
     if (songPos >= 0 && (frame & 8))
-        Gfx_TextOutlined(PHOTO_X + 150, PHOTO_Y - 30 + ((frame >> 3) & 3) * 3, PEN_YELLOW, PEN_BLACK, "La!");
+        Gfx_TextOutlined(PHOTO_X + 150, 20 + ((frame >> 3) & 3) * 3, PEN_YELLOW, PEN_BLACK, "La!");
 }
 
 static void DrawColumn(void)
@@ -391,12 +397,12 @@ static void DrawColumn(void)
     Gfx_Fill(PEN_OUTLINE, TALK_STAGE, 0, 1, TALK_STAGE_H);
     for (r = 0; r < NUM_ROWS; r++) {
         BOOL hot = r == hoverRow;
-        y = 2 + r * 22;
-        Gfx_Frame(COL_X + 1, y, SCR_W - COL_X - 2, 21, hot ? PEN_WHITE : PEN_PANEL_LT, PEN_PANEL_DK, hot ? PEN_PANEL_LT : PEN_PANEL);
-        Gfx_Text(COL_X + 4, y + 2, PEN_CREAM, rowName[r]);
-        Gfx_Text(COL_X + 3, y + 11, PEN_YELLOW, "<");
-        Gfx_Text(SCR_W - 10, y + 11, PEN_YELLOW, ">");
-        Gfx_TextCentred(COL_X + (SCR_W - COL_X) / 2, y + 11, PEN_WHITE, PEN_WHITE, rowChoices[r][sel[r]].name);
+        y = 2 + r * ROW_H;
+        Gfx_Frame(COL_X + 1, y, SCR_W - COL_X - 2, ROW_H - 1, hot ? PEN_WHITE : PEN_PANEL_LT, PEN_PANEL_DK, hot ? PEN_PANEL_LT : PEN_PANEL);
+        Gfx_Text(COL_X + 4, y + 1, PEN_CREAM, rowName[r]);
+        Gfx_Text(COL_X + 3, y + 9, PEN_YELLOW, "<");
+        Gfx_Text(SCR_W - 10, y + 9, PEN_YELLOW, ">");
+        Gfx_TextCentred(COL_X + (SCR_W - COL_X) / 2, y + 9, PEN_WHITE, PEN_WHITE, rowChoices[r][sel[r]].name);
     }
     for (b = 0; b < NUM_BTNS; b++) {
         WORD x = COL_X + 1 + (b % 3) * 30, yy = BTN_Y0 + (b / 3) * 29;
@@ -437,7 +443,7 @@ static void HandleInput(void)
     WORD r, b;
     hoverRow = hoverBtn = -1;
     if (in.mx >= COL_X && in.my < BTN_Y0 - 2) {
-        r = (in.my - 2) / 22;
+        r = (in.my - 2) / ROW_H;
         if (r >= 0 && r < NUM_ROWS) hoverRow = r;
     } else if (in.mx >= COL_X && in.my >= BTN_Y0 && in.my < BTN_Y0 + 58) {
         b = (in.mx - COL_X - 1) / 30 + ((in.my - BTN_Y0) / 29) * 3;
@@ -494,7 +500,7 @@ static void Update(void)
     /* nobody playing? the bear does something on his own */
     if (++idleT > (demo ? 4 * FPS : 45 * FPS) && !talking && songPos < 0) {
         idleT = 0;
-        switch (Rnd(4)) {
+        switch (demo ? 0 : Rnd(4)) {
         case 0: Surprise(); break;
         case 1: SayText(jokes[Rnd(N(jokes))]); break;
         case 2: SayText(hellos[Rnd(N(hellos))]); break;
@@ -547,7 +553,7 @@ int main(int argc, char **argv)
     Gfx_LoadPalette(talk_palette, 0, 0);
     Gfx_SetLimit(LIMIT_H);
     for (i = 0; i < TALK_NUM_IMAGES; i++) {
-        BOOL opaque = (i >= TALK_BACK_HOME && i <= TALK_BACK_SPACE) || i == TALK_MOUTH_OPEN || i == TALK_MOUTH_CLOSED;
+        BOOL opaque = (i >= TALK_BACK_HOME && i <= TALK_BACK_SPACE) || (i < TALK_NUM_CHARS * 3 && i % 3 != 0);
         if (!(imgs[i] = Img_Unpack(&talk_images[i], talk_blob, 0, !opaque))) { rc = 20; goto out; }
     }
     if (!MakeGadgets()) { rc = 20; goto out; }

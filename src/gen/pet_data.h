@@ -74,13 +74,17 @@
 #define PET_ICON_ITEM_PARTYHAT 68  /* 24x24 */
 #define PET_ICON_ITEM_CROWN 69  /* 24x24 */
 #define PET_ICON_ITEM_MEDI 70  /* 24x24 */
-#define PET_NUM_IMAGES 71
-extern const PackedImage pet_images[71];
+#define PET_SEAL_0 71  /* 64x64 */
+#define PET_SEAL_1 72  /* 64x64 */
+#define PET_TITLE 73  /* 320x256 */
+#define PET_NUM_IMAGES 74
+extern const PackedImage pet_images[74];
 extern const UBYTE pet_blob[];
 extern const ULONG pet_palette[256];
 #define PET_BEAR_COLS 28
 #define PET_BEAR_BASE 20
 #define PET_BEAR_SIZE 64
 #define PET_ART_BASE 132
+extern const ULONG pet_title_palette[256];
 
 #endif
