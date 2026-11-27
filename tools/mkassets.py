@@ -245,6 +245,9 @@ PET_ICONS = ["feed", "wash", "nap", "medi", "game", "dress", "go", "menu", "home
              "item-shades", "item-partyhat", "item-crown", "item-medi"]
 
 
+PARK_BEARS = ["starfish", "fudgie", "grandmaw", "hulihoop", "longnose", "tim"]   # as in tools/mkart.py
+
+
 def build_pet():
     frames = bear_frames()
     bear_pal = quantize(opaque_pixels(frames), BEAR_COLS)
@@ -254,14 +257,16 @@ def build_pet():
     poop = load_rgba(ROOT / "poop.png").resize((14, 14), Image.LANCZOS)
     props.append(("prop-poop", poop))
     flat = [im for _, im in props + icons] + [scenes[2][1], scenes[3][1]]
-    rest_pal = quantize(opaque_pixels(flat + [scenes[0][1], scenes[1][1]]), 108)
-    seal = [art("seal-0"), art("seal-1")]
-    seal_pal = quantize(opaque_pixels(seal), 16)
+    rest_pal = quantize(opaque_pixels(flat + [scenes[0][1], scenes[1][1]]), 92)
+    # Sid and the park bears from the owner's photos share the last 32 colours
+    photo_names = ["seal"] + PARK_BEARS
+    photo = {n: [art(f"{n}-0"), art(f"{n}-1")] for n in photo_names}
+    photo_pal = quantize(opaque_pixels([im for n in photo_names for im in photo[n]]), 32)
     parts = [(20, bear_pal, BEAR_COLS)]
     for i, (_, hue, sm, sa, vm) in enumerate(FRIENDS):
         parts.append((20 + BEAR_COLS * (i + 1), recolour(bear_pal, hue, sm, sa, vm), BEAR_COLS))
-    parts.append((132, rest_pal, 108))
-    parts.append((240, seal_pal, 16))
+    parts.append((132, rest_pal, 92))
+    parts.append((224, photo_pal, 32))
     palette = full_palette(parts)
     # the title screen has a palette of its own (loaded only while it is shown)
     title = art("title")
@@ -275,8 +280,9 @@ def build_pet():
         blob.add(f"scene-{n}", map_image(im, rest_pal, 132))
     for n, im in props + icons:
         blob.add(n, map_image(im, rest_pal, 132))
-    blob.add("seal-0", map_image(seal[0], seal_pal, 240, dither=True))
-    blob.add("seal-1", map_image(seal[1], seal_pal, 240, dither=True))
+    for n in photo_names:
+        blob.add(f"{n}-0", map_image(photo[n][0], photo_pal, 224, dither=True))
+        blob.add(f"{n}-1", map_image(photo[n][1], photo_pal, 224, dither=True))
     blob.add("title", map_image(title, title_pal, 20, dither=True))
     extra_h = (f"#define PET_BEAR_COLS {BEAR_COLS}\n#define PET_BEAR_BASE 20\n#define PET_BEAR_SIZE {BEAR_SIZE}\n"
                f"#define PET_ART_BASE 132\nextern const ULONG pet_title_palette[256];\n")

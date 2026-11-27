@@ -76,9 +76,21 @@
 #define PET_ICON_ITEM_MEDI 70  /* 24x24 */
 #define PET_SEAL_0 71  /* 64x64 */
 #define PET_SEAL_1 72  /* 64x64 */
-#define PET_TITLE 73  /* 320x256 */
-#define PET_NUM_IMAGES 74
-extern const PackedImage pet_images[74];
+#define PET_STARFISH_0 73  /* 64x64 */
+#define PET_STARFISH_1 74  /* 64x64 */
+#define PET_FUDGIE_0 75  /* 64x64 */
+#define PET_FUDGIE_1 76  /* 64x64 */
+#define PET_GRANDMAW_0 77  /* 64x64 */
+#define PET_GRANDMAW_1 78  /* 64x64 */
+#define PET_HULIHOOP_0 79  /* 64x64 */
+#define PET_HULIHOOP_1 80  /* 64x64 */
+#define PET_LONGNOSE_0 81  /* 64x64 */
+#define PET_LONGNOSE_1 82  /* 64x64 */
+#define PET_TIM_0 83  /* 64x64 */
+#define PET_TIM_1 84  /* 64x64 */
+#define PET_TITLE 85  /* 320x256 */
+#define PET_NUM_IMAGES 86
+extern const PackedImage pet_images[86];
 extern const UBYTE pet_blob[];
 extern const ULONG pet_palette[256];
 #define PET_BEAR_COLS 28

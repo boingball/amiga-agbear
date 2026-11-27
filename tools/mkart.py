@@ -774,6 +774,36 @@ def seal_frames():
     return out
 
 
+PARK_BEARS = ["starfish", "fudgie", "grandmaw", "hulihoop", "longnose", "tim"]
+
+
+def park_bear_frames(name):
+    """A Talker character from the owner's photos as a park friend: closed and open mouth (64x64),
+    the jaw taken from tools/characters.py (given there for a 180 pixel wide picture)."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from characters import CHARACTERS
+    c = next(c for c in CHARACTERS if c["name"] == name)
+    src = Image.open(ART / "photos" / c["file"]).convert("RGBA").crop(c["crop"])
+    box = 42 if name == "tim" else 64   # Tim is a cat's head: smaller than a bear
+    k = box / max(src.width, src.height)
+    s = src.resize((max(1, round(src.width * k)), max(1, round(src.height * k))), Image.LANCZOS)
+    j = k / (180 / src.width)   # 180-wide coordinates -> the box
+    x0, y0, x1, y1 = (round(v * j) for v in c["jaw"])
+    d = max(2, round(c["drop"] * j))
+    out = []
+    for opened in (False, True):
+        f = Image.new("RGBA", (64, 64), CLEAR)
+        img = s.copy()
+        if opened:
+            jaw = img.crop((x0, y0, x1, y1))
+            ImageDraw.Draw(img).ellipse((x0 + 1, y0 - 1, x1 - 1, y0 + d * 2), fill=(64, 24, 24, 255))
+            img.alpha_composite(jaw, (x0, y0 + d))
+        f.alpha_composite(img, ((64 - img.width) // 2, 64 - img.height))
+        out.append(f)
+    return out
+
+
 def build():
     ART.mkdir(exist_ok=True)
     out = {}
@@ -809,6 +839,8 @@ def build():
     out["talk-back-space"] = space_back()
     out["title"] = title()
     out["seal-0"], out["seal-1"] = seal_frames()
+    for n in PARK_BEARS:
+        out[f"{n}-0"], out[f"{n}-1"] = park_bear_frames(n)
     for name, fn in ICONS.items():
         out[f"icon-{name}"] = icon(fn)
     for name in ("honey", "apple", "cake", "ball", "gift"):
