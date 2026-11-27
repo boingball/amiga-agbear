@@ -38,8 +38,19 @@ static const char stack[] __attribute__((used)) = "$STACK:32768";
 /* bear frames (sprite sheet order of bear32.ilbm) */
 enum { F_FRONT = 0, F_TALK, F_WAVE, F_BACK, F_WR0, F_WR1, F_WL0, F_WL1 };
 
-enum { BEAR_AG = 0, BEAR_ROSIE, BEAR_PIP, BEAR_HONEY, BEAR_SID, NUM_BEARS };
-static const char *bearName[NUM_BEARS] = { "AG Bear", "Rosie", "Pip", "Honey", "Sid Seal" };
+enum { BEAR_AG = 0, BEAR_ROSIE, BEAR_PIP, BEAR_HONEY, BEAR_SID,
+       BEAR_STARFISH, BEAR_FUDGIE, BEAR_GRANDMAW, BEAR_HULIHOOP, NUM_BEARS };
+static const char *bearName[NUM_BEARS] = { "AG Bear", "Rosie", "Pip", "Honey", "Sid Seal",
+                                           "Starfish", "Fudgie", "Grandmaw", "HuliHoop" };
+/* the bears from the owner's photos (two pictures each: mouth shut and open), from BEAR_SID on */
+static const UWORD photoImg[] = { PET_SEAL_0, PET_STARFISH_0, PET_FUDGIE_0, PET_GRANDMAW_0, PET_HULIHOOP_0 };
+#define N_PARK (sizeof(parkBears) / sizeof(parkBears[0]))
+#define IS_PHOTO(b) ((b) >= BEAR_SID)
+/* friends who walk about in the park and come visiting */
+static const UBYTE parkBears[] = { BEAR_ROSIE, BEAR_PIP, BEAR_STARFISH, BEAR_FUDGIE, BEAR_GRANDMAW, BEAR_HULIHOOP };
+static const char *parkHello[NUM_BEARS] = { NULL, "Hi AG Bear! It's me, Rosie!", "Hey AG Bear! Pip here!", NULL, NULL,
+    "Hello AG Bear! I'm Starfish!", "Fudgie Arms here! Come for a hug!",
+    "Hello dearie! It's Original Grandmaw.", "Hula hoop! HuliHoop is here!" };
 
 typedef enum { SC_HOME, SC_GARDEN, SC_PARK, SC_SHOP, NUM_SCENES } Scene;
 
@@ -208,17 +219,18 @@ static void WalkTo(Actor *a, WORD x) { a->tx = Clamp(x, -BEAR_W, SCR_W); }
 static BOOL SaveTo(const char *name)
 {
     BPTR fh = Open((STRPTR)name, MODE_NEWFILE);
-    char buf[600];
+    char buf[700];
     LONG n;
     if (!fh) return FALSE;
     n = sprintf(buf,
         "AGBEARPET 2\nfood %d\nfun %d\nenergy %d\nclean %d\nhealth %d\ncoins %u\nhoney %u\ncake %u\n"
         "medi %u\ngifts %u\nball %u\nshades %u\nhat %u\ncrown %u\nwearshades %u\nwearhat %u\n"
-        "rosie %u\npip %u\nhoney_f %u\nsid %u\npoop %u\nsick %u\nvoice %u\nbestcatch %u\nbestmemory %u\n"
+        "rosie %u\npip %u\nhoney_f %u\nsid %u\nstarfish %u\nfudgie %u\ngrandmaw %u\nhulihoop %u\npoop %u\nsick %u\nvoice %u\nbestcatch %u\nbestmemory %u\n"
         "born %lu\nseen %lu\n",
         pet.food, pet.fun, pet.energy, pet.clean, pet.health, pet.coins, pet.honey, pet.cake,
         pet.medi, pet.gifts, pet.ball, pet.shades, pet.hat, pet.crown, pet.wearShades, pet.wearHat,
-        pet.friend[1], pet.friend[2], pet.friend[3], pet.friend[4], pet.poop, pet.sick, pet.voiceOn,
+        pet.friend[1], pet.friend[2], pet.friend[3], pet.friend[4], pet.friend[5], pet.friend[6],
+        pet.friend[7], pet.friend[8], pet.poop, pet.sick, pet.voiceOn,
         pet.bestCatch, pet.bestMemory, (unsigned long)pet.born, (unsigned long)Gfx_Seconds());
     n = Write(fh, buf, n) == n;
     Close(fh);
@@ -263,7 +275,9 @@ static BOOL LoadFrom(const char *name)
         K("health", pet.health) K("coins", pet.coins) K("honey", pet.honey) K("cake", pet.cake)
         K("medi", pet.medi) K("gifts", pet.gifts) K("ball", pet.ball) K("shades", pet.shades)
         K("hat", pet.hat) K("crown", pet.crown) K("wearshades", pet.wearShades) K("wearhat", pet.wearHat)
-        K("rosie", pet.friend[1]) K("pip", pet.friend[2]) K("honey_f", pet.friend[3]) K("sid", pet.friend[4]) K("poop", pet.poop)
+        K("rosie", pet.friend[1]) K("pip", pet.friend[2]) K("honey_f", pet.friend[3]) K("sid", pet.friend[4])
+        K("starfish", pet.friend[5]) K("fudgie", pet.friend[6]) K("grandmaw", pet.friend[7])
+        K("hulihoop", pet.friend[8]) K("poop", pet.poop)
         K("sick", pet.sick) K("voice", pet.voiceOn) K("bestcatch", pet.bestCatch)
         K("bestmemory", pet.bestMemory) K("born", pet.born) K("seen", pet.lastSeen)
 #undef K
@@ -366,12 +380,15 @@ static void EnterScene(Scene s)
     WalkTo(ME, 90);
     visitT = 0;
     if (s == SC_PARK) {
-        UBYTE first = (UBYTE)(BEAR_ROSIE + Rnd(2));
+        UBYTE first = parkBears[Rnd(N_PARK)], second;
         PlaceActor(&actors[1], first, 200 + Rnd(60));
-        if (Rnd(3) == 0) PlaceActor(&actors[2], first == BEAR_ROSIE ? BEAR_PIP : BEAR_ROSIE, 140);
+        if (Rnd(2) == 0) {
+            do second = parkBears[Rnd(N_PARK)]; while (second == first);
+            PlaceActor(&actors[2], second, 140);
+        }
         PlaceActor(&actors[3], BEAR_SID, 26);
         actors[3].speed = 0;
-        Say(&actors[1], first == BEAR_ROSIE ? "Hi AG Bear! It's me, Rosie!" : "Hey AG Bear! Pip here!");
+        Say(&actors[1], parkHello[first]);
     } else if (s == SC_SHOP) {
         PlaceActor(&actors[1], BEAR_HONEY, 246);
         actors[1].y = 98;
@@ -906,6 +923,13 @@ static void UpdateActivity(void)
                 static const char *arf[] = { "Arf arf! Hello AG Bear!", "Arf! Want to splash in my pond?",
                                              "Arf arf arf! Fish are yummy!", "Splish splosh! Hi friend!" };
                 Say(f, arf[Rnd(4)]);
+            } else if (f->bear >= BEAR_STARFISH) {
+                static const char *own[4][2] = {
+                    { "Look at the stars on my jumper!", "Twinkle twinkle, AG Bear!" },
+                    { "Big fudgy hug for you!", "My cardigan keeps me cosy!" },
+                    { "Hello dearie! Have you eaten?", "Do you like the flowers on my hat?" },
+                    { "Hula hoop! Let's spin round!", "I love my furry scarf!" } };
+                Say(f, Rnd(2) ? own[f->bear - BEAR_STARFISH][Rnd(2)] : rep[Rnd(4)]);
             } else Say(f, rep[Rnd(4)]);
             if (pet.friend[f->bear] < 5 && Rnd(2) == 0) pet.friend[f->bear]++;
             Particle_Add(PET_PROP_HEART, f->x + 28, f->y, 0, -20, 30);
@@ -1016,10 +1040,10 @@ static void HomeVisits(void)
         return;
     }
     if (v->on && v->x >= SCR_W) v->on = FALSE;
-    for (i = BEAR_ROSIE; i <= BEAR_HONEY; i++) if (pet.friend[i] > best) best = pet.friend[i];
+    for (i = BEAR_ROSIE; i < NUM_BEARS; i++) if (i != BEAR_SID && pet.friend[i] > best) best = pet.friend[i];
     if (best >= 3 && !v->on && Rnd(FPS * 90) == 0) {
         UBYTE who;
-        do who = (UBYTE)(1 + Rnd(3)); while (pet.friend[who] < 3);
+        do who = (UBYTE)(1 + Rnd(NUM_BEARS - 1)); while (who == BEAR_SID || pet.friend[who] < 3);
         PlaceActor(v, who, SCR_W);
         WalkTo(v, 200);
         visitT = 450;
@@ -1096,6 +1120,7 @@ static void DrawActor(const Actor *a, WORD clipBottom)
     UBYTE f = ActorFrame(a);
     WORD x = a->x, y = a->y + a->hop;
     WORD h = BEAR_H;
+    if (IS_PHOTO(a->bear) && (a->dir == 1 || a->dir == 2)) y -= (WORD)(((a->anim >> 2) & 1) * 2);   /* a waddle */
     static const BYTE shX[8] = { 18, 18, 18, -1, 30, 30, 24, 24 }, shY[8] = { 12, 12, 12, 0, 10, 10, 10, 10 };
     static const BYTE hatCX[8] = { 34, 34, 34, 31, 32, 32, 29, 29 }, hatB[8] = { 5, 5, 5, 4, 4, 4, 4, 4 };
     if (!a->on) return;
@@ -1208,12 +1233,12 @@ static void DrawStats(void)
     sprintf(buf, "Best memory level %u", pet.bestMemory);
     Gfx_Text(x + 10, y + 32, PEN_BLACK, buf);
     Gfx_Text(x + 10, y + 48, PEN_OUTLINE, "Friends");
-    for (i = 1; i < NUM_BEARS; i++) {
-        WORD h;
-        Gfx_Text(x + 20, y + 47 + i * 10, PEN_BLACK, bearName[i]);
+    for (i = 1; i < NUM_BEARS; i++) {   /* two columns of four */
+        WORD h, cx = x + (i <= 4 ? 14 : 150), cy = y + 47 + ((i - 1) % 4 + 1) * 10;
+        Gfx_Text(cx, cy, PEN_BLACK, bearName[i]);
         for (h = 0; h < 5; h++)
-            if (h < pet.friend[i]) Gfx_Image(imgs[PET_PROP_HEART], x + 100 + h * 11, y + 47 + i * 10);
-            else Gfx_Fill(PEN_GREY, x + 102 + h * 11, y + 49 + i * 10, 5, 4);
+            if (h < pet.friend[i]) Gfx_Image(imgs[PET_PROP_HEART], cx + 72 + h * 11, cy);
+            else Gfx_Fill(PEN_GREY, cx + 74 + h * 11, cy + 2, 5, 4);
     }
     sprintf(buf, "Bag: %u honey, %u cake, %u medicine", pet.honey, pet.cake, pet.medi);
     Gfx_Text(x + 10, y + 104, PEN_BLACK, buf);
@@ -1306,9 +1331,10 @@ static BOOL LoadImages(void)
         for (i = 0; i < 8; i++)
             if (!(bearImg[b][i] = Img_Unpack(&pet_images[PET_BEAR0 + i], pet_blob, (UBYTE)(b * PET_BEAR_COLS), TRUE)))
                 return FALSE;
-    for (i = 0; i < 8; i++)   /* Sid has two pictures: mouth shut and open */
-        if (!(bearImg[BEAR_SID][i] = Img_Unpack(&pet_images[i == F_TALK ? PET_SEAL_1 : PET_SEAL_0], pet_blob, 0, TRUE)))
-            return FALSE;
+    for (b = BEAR_SID; b < NUM_BEARS; b++)   /* the photo bears: mouth shut and open */
+        for (i = 0; i < 8; i++)
+            if (!(bearImg[b][i] = Img_Unpack(&pet_images[photoImg[b - BEAR_SID] + (i == F_TALK)], pet_blob, 0, TRUE)))
+                return FALSE;
     return TRUE;
 }
 

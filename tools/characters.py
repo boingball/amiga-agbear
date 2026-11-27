@@ -15,4 +15,10 @@ CHARACTERS = [
          jaw=(34, 84, 74, 100), drop=5, hat=(84, 10), glasses=(50, 64), tash=(52, 80), bow=(80, 130)),
     dict(name="starfish", file="starfish-bear.png", crop=(0, 0, 2576, 2536),
          jaw=(52, 52, 92, 66), drop=6, hat=(72, 12), glasses=(68, 24), tash=(68, 46), bow=(72, 72)),
+    dict(name="fudgie", file="fudgie-arms.png", crop=(0, 0, 2576, 2320),
+         jaw=(82, 82, 114, 96), drop=5, hat=(92, 10), glasses=(95, 46), tash=(98, 72), bow=(98, 102)),
+    dict(name="grandmaw", file="grandmaw.png", crop=(0, 0, 2292, 2576),
+         jaw=(58, 87, 92, 100), drop=6, hat=(72, 18), glasses=(66, 52), tash=(68, 80), bow=(74, 108)),
+    dict(name="hulihoop", file="hulihoop.png", crop=(0, 0, 2322, 2576),
+         jaw=(62, 89, 100, 102), drop=6, hat=(90, 22), glasses=(82, 46), tash=(80, 76), bow=(84, 118)),
 ]
